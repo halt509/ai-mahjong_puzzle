@@ -1,0 +1,3 @@
+[mcp_servers.pyxel]
+command = "python"
+args = ["-m", "pyxel_mcp.cli", "serve"]
