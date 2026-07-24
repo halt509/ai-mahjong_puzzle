@@ -10,9 +10,9 @@ from mahjong_puzzle.board import BOARD_HEIGHT, BOARD_WIDTH, Coordinate
 from mahjong_puzzle.game import GameState, TOTAL_TURN_COUNT
 from mahjong_puzzle.integration import GameSession
 from mahjong_puzzle.persistence import (
+    HighScoreBackend,
     HighScoreError,
-    HighScoreStore,
-    default_high_score_path,
+    create_default_high_score_store,
 )
 from mahjong_puzzle.scoring import DEFAULT_SCORING_CONFIG
 from mahjong_puzzle.sprites import (
@@ -167,13 +167,13 @@ class MahjongPuzzleApp:
         self,
         *,
         seed: int | None = None,
-        high_score_store: HighScoreStore | None = None,
+        high_score_store: HighScoreBackend | None = None,
     ) -> None:
         self.seed = seed
         self.high_score_store = (
             high_score_store
             if high_score_store is not None
-            else HighScoreStore(default_high_score_path())
+            else create_default_high_score_store()
         )
         self.persistence_error: str | None = None
         try:

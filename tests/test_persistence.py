@@ -2,7 +2,29 @@ import json
 
 import pytest
 
-from mahjong_puzzle.persistence import HighScoreError, HighScoreStore
+from mahjong_puzzle.persistence import (
+    HighScoreError,
+    HighScoreStore,
+    LocalStorageHighScoreStore,
+    create_default_high_score_store,
+)
+
+
+class FakeLocalStorage:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.fail_reads = False
+        self.fail_writes = False
+
+    def getItem(self, key: str) -> str | None:
+        if self.fail_reads:
+            raise RuntimeError("read blocked")
+        return self.values.get(key)
+
+    def setItem(self, key: str, value: str) -> None:
+        if self.fail_writes:
+            raise RuntimeError("write blocked")
+        self.values[key] = value
 
 
 def test_missing_high_score_file_loads_as_zero(tmp_path) -> None:
@@ -33,3 +55,47 @@ def test_corrupt_high_score_file_raises_explicit_error(tmp_path) -> None:
 def test_invalid_score_is_rejected(tmp_path, score: object) -> None:
     with pytest.raises(ValueError, match="0以上の整数"):
         HighScoreStore(tmp_path / "score.json").record(score)  # type: ignore[arg-type]
+
+
+def test_local_storage_persists_only_the_highest_score() -> None:
+    storage = FakeLocalStorage()
+    store = LocalStorageHighScoreStore(storage)
+
+    assert store.load() == 0
+    assert store.record(1200) == 1200
+    assert store.record(900) == 1200
+    assert store.record(1500) == 1500
+    assert json.loads(storage.values[store.key]) == {"high_score": 1500}
+
+
+def test_corrupt_local_storage_raises_explicit_error() -> None:
+    storage = FakeLocalStorage()
+    store = LocalStorageHighScoreStore(storage)
+    storage.values[store.key] = "{broken"
+
+    with pytest.raises(HighScoreError, match="ブラウザ"):
+        store.load()
+
+
+def test_local_storage_access_error_is_not_hidden() -> None:
+    storage = FakeLocalStorage()
+    storage.fail_reads = True
+    store = LocalStorageHighScoreStore(
+        storage,
+        storage_error_types=(RuntimeError,),
+    )
+
+    with pytest.raises(HighScoreError, match="ブラウザ"):
+        store.load()
+
+
+def test_web_runtime_selects_local_storage_backend() -> None:
+    storage = FakeLocalStorage()
+
+    store = create_default_high_score_store(
+        platform="emscripten",
+        web_storage=storage,
+        web_error_types=(RuntimeError,),
+    )
+
+    assert isinstance(store, LocalStorageHighScoreStore)

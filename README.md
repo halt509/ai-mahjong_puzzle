@@ -39,6 +39,26 @@ python -m mahjong_puzzle.app --seed 20260724
 mahjong-puzzle
 ```
 
+## PCブラウザでの簡易確認
+
+フェーズ4の公開前確認用として、Pyxel Web Launcher向けの配布物を生成できます。
+
+```powershell
+python scripts\build_web.py
+```
+
+生成物は`web/mahjong-puzzle.pyxapp`です。ゲームの実行に必要なPythonコードだけを含み、テスト、仕様書、開発用指示、コンセプト画像は含みません。ただし`.pyxapp`はZIP形式のため、同梱したゲームソースは閲覧可能です。
+
+このリポジトリの`main`ブランチへ生成物をpushし、GitHubから公開取得できる状態にすると、次のURLで起動できます。
+
+```text
+https://kitao.github.io/pyxel/wasm/launcher/?play=halt509.ai-mahjong_puzzle.web.mahjong-puzzle
+```
+
+現段階のWeb確認対象はキーボードを使えるPCブラウザだけです。スマートフォン、タブレット、バーチャルゲームパッドは対象外です。
+
+Web版のハイスコアはブラウザの`localStorage`へ保存します。保存キーは`ai_mahjong_puzzle.high_score`です。同じブラウザと同じWeb Launcherオリジンでは再読込後も残りますが、ブラウザデータの削除やプライベートブラウズでは失われる場合があります。ランキングや端末間同期は行いません。デスクトップ版は従来どおりローカルJSONを使用します。
+
 ### 操作
 
 | キー | 操作 |
@@ -133,6 +153,7 @@ python -m mahjong_puzzle.sample
 - `ui.py`: タイトル、オーバーレイ、通知、結果への画面状態
 - `sprites.py`: 34種の固定アトラス座標と交換可能な仮牌生成
 - `persistence.py`: ローカルハイスコアの検証・保存
+- `web_main.py`: Pyxel Web Launcher用の引数なし起動エントリ
 - `app.py`: 麻雀テーマのPyxel描画、入力、効果音の画面アダプター
 
 ## 仮点数
