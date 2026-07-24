@@ -4,12 +4,20 @@ from mahjong_puzzle.app import (
     NEXT_CELL_STEP,
     NEXT_ITEM_SPACING,
     NEXT_START_OFFSET_Y,
+    PLACEMENT_KNOCK_SOUND,
+    PLACEMENT_RATTLE_SOUND,
     SIDEBAR_HEIGHT,
+    TITLE_INNER_HEIGHT,
+    TITLE_INNER_Y,
+    TITLE_QUIT_Y,
+    TITLE_TEXT_Y,
     MahjongPuzzleApp,
+    centered_text_x,
     tile_label,
 )
 from mahjong_puzzle.tetromino import Tetromino, TetrominoKind
 from mahjong_puzzle.tiles import Honor, Suit, TileType, create_full_tile_set
+from mahjong_puzzle.ui import Notice, NoticeKind, ScreenMode, UiState
 
 
 def test_ascii_tile_labels_cover_suits_and_honors() -> None:
@@ -20,6 +28,31 @@ def test_ascii_tile_labels_cover_suits_and_honors() -> None:
     assert tile_label(TileType.honor_tile(Honor.WHITE)) == "P"
     assert tile_label(TileType.honor_tile(Honor.GREEN)) == "F"
     assert tile_label(TileType.honor_tile(Honor.RED)) == "C"
+
+
+def test_title_text_positions_are_calculated_from_screen_center() -> None:
+    assert centered_text_x("MAHJONG TILE PUZZLE") == 90
+    assert centered_text_x("ESC: QUIT") == 110
+
+
+def test_title_content_has_matching_top_and_bottom_margins() -> None:
+    title_top_margin = TITLE_TEXT_Y - TITLE_INNER_Y
+    inner_bottom = TITLE_INNER_Y + TITLE_INNER_HEIGHT - 1
+    quit_bottom_margin = inner_bottom - (TITLE_QUIT_Y + 4)
+
+    assert title_top_margin == quit_bottom_margin
+
+
+def test_placement_sound_layers_short_noise_and_tile_knock() -> None:
+    notes, tones, volumes, effects, speed = PLACEMENT_RATTLE_SOUND
+
+    assert len(notes) // 2 == len(tones) == len(volumes) == len(effects)
+    assert len(tones) >= 6
+    assert set(tones) == {"n"}
+    assert speed <= 2
+
+    _, knock_tones, _, _, _ = PLACEMENT_KNOCK_SOUND
+    assert set(knock_tones) == {"p"}
 
 
 def test_app_construction_does_not_start_pyxel_loop() -> None:
@@ -48,3 +81,52 @@ def test_all_three_next_previews_fit_inside_sidebar() -> None:
             - 1
         )
         assert preview_bottom <= sidebar_bottom
+
+
+def test_control_dismisses_notice_without_moving_block(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260724)
+    app.ui = UiState(screen=ScreenMode.GAME)
+    app.ui.queue_notifications(
+        (
+            Notice(
+                kind=NoticeKind.WIN,
+                title="WIN!",
+                lines=("TOTAL +100",),
+            ),
+        ),
+        game_over=False,
+    )
+    original_x = app.game.active_x
+    monkeypatch.setattr(
+        app,
+        "_notification_control_pressed",
+        lambda: True,
+    )
+
+    app.update()
+
+    assert app.ui.current_notice is None
+    assert app.ui.screen is ScreenMode.GAME
+    assert app.game.active_x == original_x
+
+
+def test_sidebar_draws_visible_dora_indicators_as_tile_sprites(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260724)
+    calls: list[tuple[int, int, TileType]] = []
+    monkeypatch.setattr(
+        "mahjong_puzzle.app.pyxel.text",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app,
+        "_blt_tile",
+        lambda x, y, tile_type: calls.append((x, y, tile_type)),
+    )
+
+    app._draw_dora_indicators()
+
+    assert [tile_type for _, _, tile_type in calls] == [
+        tile.kind for tile in app.game.visible_dora_indicators
+    ]

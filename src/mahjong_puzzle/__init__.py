@@ -1,4 +1,4 @@
-"""フェーズ1から3までのルール・盤面・ターン統合公開API。"""
+"""フェーズ1から4までのルール・盤面・ターン統合公開API。"""
 
 from mahjong_puzzle.board import Board, Coordinate
 from mahjong_puzzle.dora import count_dora, dora_from_indicator
