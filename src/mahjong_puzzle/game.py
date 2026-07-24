@@ -55,6 +55,7 @@ class GameState:
     active_y: int = 0
     active_rotation: int = 0
     next_display_count: int = NEXT_BLOCK_DISPLAY_COUNT
+    revealed_dora_count: int = 1
 
     def __post_init__(self) -> None:
         if not isinstance(self.board, Board):
@@ -79,9 +80,14 @@ class GameState:
             ("active_y", self.active_y),
             ("active_rotation", self.active_rotation),
             ("next_display_count", self.next_display_count),
+            ("revealed_dora_count", self.revealed_dora_count),
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name}は0以上の整数でなければなりません")
+        if not 1 <= self.revealed_dora_count <= DORA_RESERVE_COUNT:
+            raise ValueError(
+                f"公開ドラ表示牌数は1から{DORA_RESERVE_COUNT}でなければなりません"
+            )
         self._validate_progress()
         self.validate_tile_conservation()
         if not self.is_game_over:
@@ -139,9 +145,19 @@ class GameState:
 
     @property
     def visible_dora_indicators(self) -> tuple[Tile, ...]:
-        """フェーズ2ではゲーム開始時の1枚だけを公開する。"""
+        """現在公開されているドラ表示牌を返す。"""
 
-        return self.dora_indicator_tiles[:1]
+        return self.dora_indicator_tiles[: self.revealed_dora_count]
+
+    def reveal_dora_indicators(self, count: int) -> tuple[Tile, ...]:
+        """予約上限まで追加のドラ表示牌を公開し、新規公開分を返す。"""
+
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ValueError("追加公開数は0以上の整数でなければなりません")
+        start = self.revealed_dora_count
+        end = min(DORA_RESERVE_COUNT, start + count)
+        self.revealed_dora_count = end
+        return self.dora_indicator_tiles[start:end]
 
     @property
     def current_block(self) -> Tetromino | None:

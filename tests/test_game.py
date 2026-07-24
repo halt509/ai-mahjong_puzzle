@@ -41,6 +41,19 @@ def test_current_and_three_next_blocks_are_exposed() -> None:
     assert game.next_blocks == game.blocks[1:4]
 
 
+def test_dora_indicators_are_revealed_up_to_four() -> None:
+    game = GameState.new(seed=10)
+
+    first_additions = game.reveal_dora_indicators(2)
+    final_additions = game.reveal_dora_indicators(5)
+    no_space = game.reveal_dora_indicators(1)
+
+    assert first_additions == game.dora_indicator_tiles[1:3]
+    assert final_additions == game.dora_indicator_tiles[3:4]
+    assert no_space == ()
+    assert game.visible_dora_indicators == game.dora_indicator_tiles
+
+
 def test_cursor_movement_stays_inside_board() -> None:
     game = GameState.new(seed=2)
 

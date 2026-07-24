@@ -1,4 +1,4 @@
-"""フェーズ2の盤面・ブロック操作を確認するPyxel画面。"""
+"""フェーズ3までのゲーム進行を確認するPyxel画面。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pyxel
 
 from mahjong_puzzle.board import BOARD_HEIGHT, BOARD_WIDTH, Coordinate
 from mahjong_puzzle.game import GameState, TOTAL_TURN_COUNT
+from mahjong_puzzle.integration import GameSession
 from mahjong_puzzle.tetromino import PositionedCell, Tetromino
 from mahjong_puzzle.tiles import Honor, Suit, Tile, TileType
 
@@ -17,6 +18,13 @@ BOARD_ORIGIN_X = 8
 BOARD_ORIGIN_Y = 24
 CELL_SIZE = 16
 SIDEBAR_X = 144
+SIDEBAR_WIDTH = 108
+SIDEBAR_HEIGHT = 132
+NEXT_LABEL_OFFSET_Y = 80
+NEXT_START_OFFSET_Y = 88
+NEXT_ITEM_SPACING = 14
+NEXT_CELL_STEP = 4
+NEXT_CELL_SIZE = 3
 
 _SUIT_COLORS = {
     Suit.MANZU: 8,
@@ -66,7 +74,8 @@ class MahjongPuzzleApp:
 
     def __init__(self, *, seed: int | None = None) -> None:
         self.seed = seed
-        self.game = GameState.new(seed=seed)
+        self.session = GameSession.new(seed=seed)
+        self.game: GameState = self.session.game
 
     def run(self) -> None:
         """Pyxelウィンドウを初期化してメインループを開始する。"""
@@ -74,7 +83,7 @@ class MahjongPuzzleApp:
         pyxel.init(
             SCREEN_WIDTH,
             SCREEN_HEIGHT,
-            title="Mahjong Puzzle - Phase 2",
+            title="Mahjong Puzzle - Phase 3",
             fps=30,
         )
         pyxel.run(self.update, self.draw)
@@ -100,13 +109,13 @@ class MahjongPuzzleApp:
         if pyxel.btnp(pyxel.KEY_X):
             self.game.rotate_active(clockwise=True)
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.KEY_RETURN):
-            self.game.place_active()
+            self.session.place_active()
 
     def draw(self) -> None:
         """盤面、配置プレビュー、次3ブロック、進行情報を描画する。"""
 
         pyxel.cls(1)
-        pyxel.text(8, 6, "MAHJONG PUZZLE / PHASE 2", 7)
+        pyxel.text(8, 6, "MAHJONG PUZZLE / PHASE 3", 7)
         self._draw_board()
         self._draw_preview()
         self._draw_sidebar()
@@ -167,45 +176,93 @@ class MahjongPuzzleApp:
         pyxel.text(label_x, screen_y + 5, label, tile_color(tile.kind))
 
     def _draw_sidebar(self) -> None:
-        pyxel.rectb(SIDEBAR_X - 4, BOARD_ORIGIN_Y, 108, 132, 5)
+        pyxel.rectb(
+            SIDEBAR_X - 4,
+            BOARD_ORIGIN_Y,
+            SIDEBAR_WIDTH,
+            SIDEBAR_HEIGHT,
+            5,
+        )
         pyxel.text(
             SIDEBAR_X,
             BOARD_ORIGIN_Y + 5,
             f"TURN {self.game.turn:02d}/{TOTAL_TURN_COUNT:02d}",
             7,
         )
-        current = self.game.current_block
-        current_name = "-" if current is None else current.kind.value
-        pyxel.text(SIDEBAR_X, BOARD_ORIGIN_Y + 16, f"CURRENT: {current_name}", 10)
-        indicator = self.game.visible_dora_indicators[0]
+        pyxel.text(
+            SIDEBAR_X,
+            BOARD_ORIGIN_Y + 16,
+            f"SCORE: {self.session.total_score}",
+            10,
+        )
         pyxel.text(
             SIDEBAR_X,
             BOARD_ORIGIN_Y + 27,
-            f"DORA IND: {tile_label(indicator.kind)}",
+            f"COMBO: {self.session.turn_state.consecutive_win_turns}",
+            7,
+        )
+        current = self.game.current_block
+        current_name = "-" if current is None else current.kind.value
+        pyxel.text(SIDEBAR_X, BOARD_ORIGIN_Y + 38, f"CURRENT: {current_name}", 10)
+        indicator_labels = " ".join(
+            tile_label(indicator.kind)
+            for indicator in self.game.visible_dora_indicators
+        )
+        pyxel.text(
+            SIDEBAR_X,
+            BOARD_ORIGIN_Y + 49,
+            f"DORA: {indicator_labels}",
             7,
         )
         pyxel.text(
             SIDEBAR_X,
-            BOARD_ORIGIN_Y + 38,
+            BOARD_ORIGIN_Y + 60,
             f"RIVER: {self.game.river.total_count}",
             7,
         )
-        pyxel.text(SIDEBAR_X, BOARD_ORIGIN_Y + 52, "NEXT", 7)
+        last = self.session.last_turn
+        last_counts = (
+            "W0 K0"
+            if last is None
+            else f"W{len(last.wins)} K{len(last.kans)}"
+        )
+        pyxel.text(
+            SIDEBAR_X,
+            BOARD_ORIGIN_Y + 71,
+            f"LAST: {last_counts}",
+            7,
+        )
+        pyxel.text(
+            SIDEBAR_X,
+            BOARD_ORIGIN_Y + NEXT_LABEL_OFFSET_Y,
+            "NEXT",
+            7,
+        )
         for index, block in enumerate(self.game.next_blocks):
             self._draw_next_block(
                 block,
                 x=SIDEBAR_X,
-                y=BOARD_ORIGIN_Y + 64 + index * 22,
+                y=(
+                    BOARD_ORIGIN_Y
+                    + NEXT_START_OFFSET_Y
+                    + index * NEXT_ITEM_SPACING
+                ),
             )
 
     @staticmethod
     def _draw_next_block(block: Tetromino, *, x: int, y: int) -> None:
-        pyxel.text(x, y + 3, block.kind.value, 10)
+        pyxel.text(x, y + 2, block.kind.value, 10)
         shape_x = x + 12
         for cell in block.cells:
-            cell_x = shape_x + cell.x * 5
-            cell_y = y + cell.y * 5
-            pyxel.rect(cell_x, cell_y, 4, 4, tile_color(cell.tile.kind))
+            cell_x = shape_x + cell.x * NEXT_CELL_STEP
+            cell_y = y + cell.y * NEXT_CELL_STEP
+            pyxel.rect(
+                cell_x,
+                cell_y,
+                NEXT_CELL_SIZE,
+                NEXT_CELL_SIZE,
+                tile_color(cell.tile.kind),
+            )
 
     @staticmethod
     def _draw_game_over() -> None:
@@ -222,7 +279,7 @@ class MahjongPuzzleApp:
 def main() -> None:
     """コマンドラインからフェーズ2画面を起動する。"""
 
-    parser = argparse.ArgumentParser(description="Mahjong Puzzle Phase 2")
+    parser = argparse.ArgumentParser(description="Mahjong Puzzle Phase 3")
     parser.add_argument(
         "--seed",
         type=int,
