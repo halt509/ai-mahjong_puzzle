@@ -432,17 +432,17 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
 
     draw.text(
         (1030, panel_y1 + 34),
-        "操作",
+        "操作（PC / スマホ）",
         font=font(34, bold=True),
         fill=GOLD,
     )
     controls = (
-        ("矢印", "移動"),
-        ("Z / X", "回転"),
-        ("Space / Enter", "配置"),
-        ("Tab", "川を見る"),
-        ("Y", "役一覧"),
-        ("Esc", "終了"),
+        ("矢印 / 十字", "移動"),
+        ("Z / Xボタン", "左回転"),
+        ("X / Bボタン", "右回転"),
+        ("Space / A", "配置"),
+        ("Tab / BACK", "川を見る"),
+        ("Y / Yボタン", "役一覧"),
     )
     for index, (key, action) in enumerate(controls):
         y = panel_y1 + 88 + index * 41
@@ -470,7 +470,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
     )
     draw.text(
         (WIDTH - MARGIN, 2372),
-        "更新: 2026-07-24 / AI: GPT-5",
+        "更新: 2026-07-25 / AI: GPT-5",
         font=font(17),
         fill=MUTED,
         anchor="ra",

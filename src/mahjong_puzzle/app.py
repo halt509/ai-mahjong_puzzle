@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from enum import Enum
 
 import pyxel
 
@@ -125,6 +126,81 @@ _YAKU_SCREEN_NAMES = {
 }
 
 
+class ControlAction(str, Enum):
+    """キーボードとゲームパッドで共有する画面操作。"""
+
+    MOVE_LEFT = "move_left"
+    MOVE_RIGHT = "move_right"
+    MOVE_UP = "move_up"
+    MOVE_DOWN = "move_down"
+    ROTATE_COUNTERCLOCKWISE = "rotate_counterclockwise"
+    ROTATE_CLOCKWISE = "rotate_clockwise"
+    PLACE = "place"
+    TOGGLE_RIVER = "toggle_river"
+    TOGGLE_YAKU = "toggle_yaku"
+    START_GAME = "start_game"
+    RESTART_GAME = "restart_game"
+    CANCEL = "cancel"
+    QUIT = "quit"
+
+
+CONTROL_BINDINGS: dict[ControlAction, tuple[int, ...]] = {
+    ControlAction.MOVE_LEFT: (
+        pyxel.KEY_LEFT,
+        pyxel.GAMEPAD1_BUTTON_DPAD_LEFT,
+    ),
+    ControlAction.MOVE_RIGHT: (
+        pyxel.KEY_RIGHT,
+        pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT,
+    ),
+    ControlAction.MOVE_UP: (
+        pyxel.KEY_UP,
+        pyxel.GAMEPAD1_BUTTON_DPAD_UP,
+    ),
+    ControlAction.MOVE_DOWN: (
+        pyxel.KEY_DOWN,
+        pyxel.GAMEPAD1_BUTTON_DPAD_DOWN,
+    ),
+    ControlAction.ROTATE_COUNTERCLOCKWISE: (
+        pyxel.KEY_Z,
+        pyxel.GAMEPAD1_BUTTON_X,
+    ),
+    ControlAction.ROTATE_CLOCKWISE: (
+        pyxel.KEY_X,
+        pyxel.GAMEPAD1_BUTTON_B,
+    ),
+    ControlAction.PLACE: (
+        pyxel.KEY_SPACE,
+        pyxel.KEY_RETURN,
+        pyxel.GAMEPAD1_BUTTON_A,
+    ),
+    ControlAction.TOGGLE_RIVER: (
+        pyxel.KEY_TAB,
+        pyxel.GAMEPAD1_BUTTON_BACK,
+    ),
+    ControlAction.TOGGLE_YAKU: (
+        pyxel.KEY_Y,
+        pyxel.GAMEPAD1_BUTTON_Y,
+    ),
+    ControlAction.START_GAME: (
+        pyxel.KEY_SPACE,
+        pyxel.KEY_RETURN,
+        pyxel.GAMEPAD1_BUTTON_A,
+        pyxel.GAMEPAD1_BUTTON_START,
+    ),
+    ControlAction.RESTART_GAME: (
+        pyxel.KEY_R,
+        pyxel.GAMEPAD1_BUTTON_A,
+        pyxel.GAMEPAD1_BUTTON_START,
+    ),
+    ControlAction.CANCEL: (
+        pyxel.KEY_ESCAPE,
+        pyxel.GAMEPAD1_BUTTON_B,
+    ),
+    ControlAction.QUIT: (pyxel.KEY_ESCAPE,),
+}
+
+
 def centered_text_x(text: str) -> int:
     """Pyxel組み込みフォントの文字列を画面中央へ置くX座標を返す。"""
 
@@ -220,21 +296,11 @@ class MahjongPuzzleApp:
     def _pressed(*keys: int) -> bool:
         return any(pyxel.btnp(key) for key in keys)
 
+    def _action_pressed(self, action: ControlAction) -> bool:
+        return self._pressed(*CONTROL_BINDINGS[action])
+
     def _notification_control_pressed(self) -> bool:
-        return self._pressed(
-            pyxel.KEY_LEFT,
-            pyxel.KEY_RIGHT,
-            pyxel.KEY_UP,
-            pyxel.KEY_DOWN,
-            pyxel.KEY_Z,
-            pyxel.KEY_X,
-            pyxel.KEY_SPACE,
-            pyxel.KEY_RETURN,
-            pyxel.KEY_TAB,
-            pyxel.KEY_Y,
-            pyxel.KEY_R,
-            pyxel.KEY_ESCAPE,
-        )
+        return any(self._action_pressed(action) for action in ControlAction)
 
     def update(self) -> None:
         """画面状態に応じた入力を処理する。"""
@@ -246,52 +312,56 @@ class MahjongPuzzleApp:
             return
 
         if self.ui.screen is ScreenMode.TITLE:
-            if self._pressed(pyxel.KEY_SPACE, pyxel.KEY_RETURN):
+            if self._action_pressed(ControlAction.START_GAME):
                 self.ui.start_game()
-            elif pyxel.btnp(pyxel.KEY_ESCAPE):
+            elif self._action_pressed(ControlAction.QUIT):
                 pyxel.quit()
             return
 
         if self.ui.screen is ScreenMode.RIVER:
-            if self._pressed(pyxel.KEY_TAB, pyxel.KEY_ESCAPE):
+            if self._action_pressed(
+                ControlAction.TOGGLE_RIVER
+            ) or self._action_pressed(ControlAction.CANCEL):
                 self.ui.close_overlay()
             return
 
         if self.ui.screen is ScreenMode.YAKU:
-            if self._pressed(pyxel.KEY_Y, pyxel.KEY_ESCAPE):
+            if self._action_pressed(
+                ControlAction.TOGGLE_YAKU
+            ) or self._action_pressed(ControlAction.CANCEL):
                 self.ui.close_overlay()
             return
 
         if self.ui.screen is ScreenMode.RESULT:
-            if pyxel.btnp(pyxel.KEY_R):
+            if self._action_pressed(ControlAction.RESTART_GAME):
                 self._new_session()
                 self.ui = UiState(screen=ScreenMode.GAME)
-            elif pyxel.btnp(pyxel.KEY_ESCAPE):
+            elif self._action_pressed(ControlAction.QUIT):
                 pyxel.quit()
             return
 
-        if pyxel.btnp(pyxel.KEY_ESCAPE):
+        if self._action_pressed(ControlAction.QUIT):
             pyxel.quit()
             return
-        if pyxel.btnp(pyxel.KEY_TAB):
+        if self._action_pressed(ControlAction.TOGGLE_RIVER):
             self.ui.open_overlay(ScreenMode.RIVER)
             return
-        if pyxel.btnp(pyxel.KEY_Y):
+        if self._action_pressed(ControlAction.TOGGLE_YAKU):
             self.ui.open_overlay(ScreenMode.YAKU)
             return
-        if pyxel.btnp(pyxel.KEY_LEFT):
+        if self._action_pressed(ControlAction.MOVE_LEFT):
             self.game.move_active(-1, 0)
-        if pyxel.btnp(pyxel.KEY_RIGHT):
+        if self._action_pressed(ControlAction.MOVE_RIGHT):
             self.game.move_active(1, 0)
-        if pyxel.btnp(pyxel.KEY_UP):
+        if self._action_pressed(ControlAction.MOVE_UP):
             self.game.move_active(0, -1)
-        if pyxel.btnp(pyxel.KEY_DOWN):
+        if self._action_pressed(ControlAction.MOVE_DOWN):
             self.game.move_active(0, 1)
-        if pyxel.btnp(pyxel.KEY_Z):
+        if self._action_pressed(ControlAction.ROTATE_COUNTERCLOCKWISE):
             self.game.rotate_active(clockwise=False)
-        if pyxel.btnp(pyxel.KEY_X):
+        if self._action_pressed(ControlAction.ROTATE_CLOCKWISE):
             self.game.rotate_active(clockwise=True)
-        if self._pressed(pyxel.KEY_SPACE, pyxel.KEY_RETURN):
+        if self._action_pressed(ControlAction.PLACE):
             result = self.session.place_active()
             self.ui.accept_turn(result)
             pyxel.play(0, 0)
@@ -358,7 +428,7 @@ class MahjongPuzzleApp:
             self._blt_tile(sample_x + index * 18, 56, tile_type)
         tagline = "OVERWRITE. BUILD. WIN."
         pyxel.text(centered_text_x(tagline), 86, tagline, COLOR_IVORY)
-        start_text = "SPACE / ENTER TO START"
+        start_text = "SPACE / ENTER / A START"
         pyxel.text(
             centered_text_x(start_text),
             104,
@@ -397,13 +467,13 @@ class MahjongPuzzleApp:
         pyxel.text(
             8,
             163,
-            "ARROWS MOVE  Z/X ROTATE  SPACE PUT",
+            "KEYS: ARROWS Z/X SPACE TAB/Y",
             COLOR_MUTED,
         )
         pyxel.text(
             8,
             170,
-            "TAB RIVER  Y YAKU  ESC QUIT",
+            "PAD: D-PAD X/B A BACK/Y",
             COLOR_MUTED,
         )
 
@@ -622,7 +692,7 @@ class MahjongPuzzleApp:
             label = tile_label(record.tile.kind)
             label_x = x + (12 - len(label) * 4) // 2
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
-        pyxel.text(88, 153, "TAB / ESC CLOSE", COLOR_MUTED)
+        pyxel.text(76, 153, "TAB / BACK / B CLOSE", COLOR_MUTED)
 
     def _draw_yaku_overlay(self) -> None:
         self._draw_overlay_panel("YAKU LIST")
@@ -639,7 +709,7 @@ class MahjongPuzzleApp:
             pyxel.text(30, y, _YAKU_SCREEN_NAMES[yaku], COLOR_IVORY)
             pyxel.text(190, y, f"{points:>3}", COLOR_GOLD)
         pyxel.text(14, 146, "* ACQUIRED ON AT LEAST ONE ROW", COLOR_MUTED)
-        pyxel.text(94, 158, "Y / ESC CLOSE", COLOR_MUTED)
+        pyxel.text(98, 158, "Y / B CLOSE", COLOR_MUTED)
 
     @staticmethod
     def _draw_overlay_panel(title: str) -> None:
@@ -667,7 +737,7 @@ class MahjongPuzzleApp:
             COLOR_IVORY,
         )
         pyxel.text(68, 123, f"RIVER TILES  {summary.river_count}", COLOR_IVORY)
-        pyxel.text(78, 141, "R RESTART   ESC QUIT", COLOR_BRIGHT_IVORY)
+        pyxel.text(76, 141, "R/A/START AGAIN  ESC QUIT", COLOR_BRIGHT_IVORY)
         if self.persistence_error is not None:
             pyxel.text(64, 151, "HIGH SCORE SAVE FAILED", COLOR_VERMILION)
 

@@ -32,3 +32,14 @@ def test_web_app_does_not_include_development_instructions() -> None:
 
     assert "AGENTS.md" not in filenames
     assert "HANDOFF.md" not in filenames
+
+
+def test_web_app_contains_mobile_gamepad_bindings() -> None:
+    with ZipFile(WEB_APP) as archive:
+        app_source = archive.read(
+            "mahjong-puzzle/mahjong_puzzle/app.py"
+        ).decode("utf-8")
+
+    assert "GAMEPAD1_BUTTON_DPAD_LEFT" in app_source
+    assert "GAMEPAD1_BUTTON_A" in app_source
+    assert "GAMEPAD1_BUTTON_BACK" in app_source

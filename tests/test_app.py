@@ -1,5 +1,8 @@
+import pyxel
+
 from mahjong_puzzle.app import (
     BOARD_ORIGIN_Y,
+    CONTROL_BINDINGS,
     NEXT_CELL_SIZE,
     NEXT_CELL_STEP,
     NEXT_ITEM_SPACING,
@@ -11,6 +14,7 @@ from mahjong_puzzle.app import (
     TITLE_INNER_Y,
     TITLE_QUIT_Y,
     TITLE_TEXT_Y,
+    ControlAction,
     MahjongPuzzleApp,
     centered_text_x,
     tile_label,
@@ -98,9 +102,9 @@ def test_control_dismisses_notice_without_moving_block(monkeypatch) -> None:
     )
     original_x = app.game.active_x
     monkeypatch.setattr(
-        app,
-        "_notification_control_pressed",
-        lambda: True,
+        pyxel,
+        "btnp",
+        lambda key: key == pyxel.GAMEPAD1_BUTTON_A,
     )
 
     app.update()
@@ -108,6 +112,109 @@ def test_control_dismisses_notice_without_moving_block(monkeypatch) -> None:
     assert app.ui.current_notice is None
     assert app.ui.screen is ScreenMode.GAME
     assert app.game.active_x == original_x
+
+
+def test_gamepad_buttons_are_bound_to_mobile_controls() -> None:
+    assert pyxel.GAMEPAD1_BUTTON_DPAD_LEFT in CONTROL_BINDINGS[
+        ControlAction.MOVE_LEFT
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT in CONTROL_BINDINGS[
+        ControlAction.MOVE_RIGHT
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_DPAD_UP in CONTROL_BINDINGS[
+        ControlAction.MOVE_UP
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_DPAD_DOWN in CONTROL_BINDINGS[
+        ControlAction.MOVE_DOWN
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_X in CONTROL_BINDINGS[
+        ControlAction.ROTATE_COUNTERCLOCKWISE
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_B in CONTROL_BINDINGS[
+        ControlAction.ROTATE_CLOCKWISE
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_A in CONTROL_BINDINGS[ControlAction.PLACE]
+    assert pyxel.GAMEPAD1_BUTTON_Y in CONTROL_BINDINGS[
+        ControlAction.TOGGLE_YAKU
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_BACK in CONTROL_BINDINGS[
+        ControlAction.TOGGLE_RIVER
+    ]
+    assert pyxel.GAMEPAD1_BUTTON_START in CONTROL_BINDINGS[
+        ControlAction.START_GAME
+    ]
+
+
+def test_gamepad_starts_game_and_moves_active_block(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    pressed = {pyxel.GAMEPAD1_BUTTON_A}
+    monkeypatch.setattr(pyxel, "btnp", lambda key: key in pressed)
+
+    app.update()
+
+    assert app.ui.screen is ScreenMode.GAME
+
+    original_x = app.game.active_x
+    pressed.clear()
+    pressed.add(pyxel.GAMEPAD1_BUTTON_DPAD_LEFT)
+
+    app.update()
+
+    assert app.game.active_x == original_x - 1
+
+
+def test_gamepad_a_places_active_block(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.GAME)
+    monkeypatch.setattr(
+        pyxel,
+        "btnp",
+        lambda key: key == pyxel.GAMEPAD1_BUTTON_A,
+    )
+    monkeypatch.setattr(pyxel, "play", lambda *args, **kwargs: None)
+
+    app.update()
+
+    assert app.game.turn == 1
+
+
+def test_gamepad_opens_and_closes_overlays(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.GAME)
+    pressed = {pyxel.GAMEPAD1_BUTTON_BACK}
+    monkeypatch.setattr(pyxel, "btnp", lambda key: key in pressed)
+
+    app.update()
+
+    assert app.ui.screen is ScreenMode.RIVER
+
+    pressed.clear()
+    pressed.add(pyxel.GAMEPAD1_BUTTON_B)
+    app.update()
+
+    assert app.ui.screen is ScreenMode.GAME
+
+    pressed.clear()
+    pressed.add(pyxel.GAMEPAD1_BUTTON_Y)
+    app.update()
+
+    assert app.ui.screen is ScreenMode.YAKU
+
+
+def test_gamepad_start_restarts_from_result(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.RESULT)
+    previous_session = app.session
+    monkeypatch.setattr(
+        pyxel,
+        "btnp",
+        lambda key: key == pyxel.GAMEPAD1_BUTTON_START,
+    )
+
+    app.update()
+
+    assert app.ui.screen is ScreenMode.GAME
+    assert app.session is not previous_session
 
 
 def test_sidebar_draws_visible_dora_indicators_as_tile_sprites(
