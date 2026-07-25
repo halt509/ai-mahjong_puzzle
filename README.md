@@ -100,6 +100,16 @@ Web版のハイスコアはブラウザの`localStorage`へ保存します。保
 
 正式素材へ交換するときは、`sprites.py`の`tile_sprite_uv()`が返す配置を維持して画像バンク0へ読み込めば、盤面ロジックやUIを変更せずに差し替えられます。並びは1段目が萬子、2段目が筒子、3段目が索子、4段目が東南西北白發中です。
 
+## 初心者向け遊び方シート
+
+`assets/guides/beginner-guide-ja.png`は、実際の仮牌スプライトとゲーム配色を使った日本語の遊び方・役一覧です。掲載している8牌の例は、生成時に現在の役判定へ通して整合性を確認します。
+
+画像を再生成する場合は、PillowとBIZ UDゴシックまたはNoto Sans CJKを用意して次を実行します。
+
+```powershell
+python scripts\build_beginner_guide.py
+```
+
 ## テスト
 
 ```powershell
