@@ -808,6 +808,8 @@ class MahjongPuzzleApp:
             f"RIVER {self.game.river.total_count}",
             COLOR_MUTED,
         )
+        pyxel.text(69, 216, "A: PLACE", COLOR_GOLD)
+        pyxel.text(110, 216, "X/B: ROTATE", COLOR_IVORY)
         for index, record in enumerate(self.game.river.recent(8)):
             self._blt_tile(
                 24 + index * TILE_SPRITE_SIZE,

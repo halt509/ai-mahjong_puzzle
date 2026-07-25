@@ -67,7 +67,7 @@ https://kitao.github.io/pyxel/wasm/launcher/?play=halt509/ai-mahjong_puzzle/main
 https://kitao.github.io/pyxel/wasm/launcher/?play=halt509/ai-mahjong_puzzle/main/web/mahjong-puzzle-mobile&gamepad=enabled
 ```
 
-PC版は従来どおりキーボードで操作できます。スマートフォン版は盤面を上、得点・ドラ・NEXT・川を下にまとめ、Pyxel Web Launcherのバーチャルゲームパッドで操作します。ルール、ゲーム状態、入力、牌スプライト、ハイスコア保存は共通です。盤面への直接タッチ操作は対象外です。
+PC版は従来どおりキーボードで操作できます。スマートフォン版は盤面を上、得点・ドラ・NEXT・川を下にまとめ、Pyxel Web Launcherのバーチャルゲームパッドで操作します。情報欄には、プレイ中に参照しやすいよう`A: PLACE`（配置確定）と`X/B: ROTATE`（回転）を常時表示します。ルール、ゲーム状態、入力、牌スプライト、ハイスコア保存は共通です。盤面への直接タッチ操作は対象外です。
 
 Web版のハイスコアはブラウザの`localStorage`へ保存します。保存キーは`ai_mahjong_puzzle.high_score`です。同じブラウザと同じWeb Launcherオリジンでは再読込後も残りますが、ブラウザデータの削除やプライベートブラウズでは失われる場合があります。ランキングや端末間同期は行いません。デスクトップ版は従来どおりローカルJSONを使用します。
 

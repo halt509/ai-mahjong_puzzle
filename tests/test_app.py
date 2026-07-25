@@ -115,6 +115,24 @@ def test_portrait_game_uses_mobile_status_instead_of_sidebar(monkeypatch) -> Non
     assert calls == ["board", "preview", "mobile_status"]
 
 
+def test_mobile_status_always_shows_essential_controls(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+    texts: list[str] = []
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(
+        pyxel,
+        "text",
+        lambda _x, _y, text, _color: texts.append(text),
+    )
+    monkeypatch.setattr(app, "_blt_tile", lambda *args: None)
+
+    app._draw_mobile_status()
+
+    assert "A: PLACE" in texts
+    assert "X/B: ROTATE" in texts
+
+
 def test_all_three_next_previews_fit_inside_sidebar() -> None:
     tiles = create_full_tile_set()
     sidebar_bottom = BOARD_ORIGIN_Y + SIDEBAR_HEIGHT - 1
