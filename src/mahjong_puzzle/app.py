@@ -30,12 +30,16 @@ from mahjong_puzzle.yaku import Yaku
 
 SCREEN_WIDTH = 256
 SCREEN_HEIGHT = 176
+PORTRAIT_SCREEN_WIDTH = 176
+PORTRAIT_SCREEN_HEIGHT = 256
 TITLE_INNER_Y = 16
 TITLE_INNER_HEIGHT = 144
 TITLE_TEXT_Y = 34
 TITLE_QUIT_Y = 137
 BOARD_ORIGIN_X = 8
 BOARD_ORIGIN_Y = 24
+PORTRAIT_BOARD_ORIGIN_X = 24
+PORTRAIT_BOARD_ORIGIN_Y = 18
 CELL_SIZE = 16
 SIDEBAR_X = 144
 SIDEBAR_WIDTH = 108
@@ -144,6 +148,13 @@ class ControlAction(str, Enum):
     QUIT = "quit"
 
 
+class LayoutMode(str, Enum):
+    """端末ごとに選択する画面レイアウト。"""
+
+    LANDSCAPE = "landscape"
+    PORTRAIT = "portrait"
+
+
 CONTROL_BINDINGS: dict[ControlAction, tuple[int, ...]] = {
     ControlAction.MOVE_LEFT: (
         pyxel.KEY_LEFT,
@@ -244,8 +255,12 @@ class MahjongPuzzleApp:
         *,
         seed: int | None = None,
         high_score_store: HighScoreBackend | None = None,
+        layout: LayoutMode = LayoutMode.LANDSCAPE,
     ) -> None:
+        if not isinstance(layout, LayoutMode):
+            raise TypeError("layoutにはLayoutModeが必要です")
         self.seed = seed
+        self.layout = layout
         self.high_score_store = (
             high_score_store
             if high_score_store is not None
@@ -260,6 +275,41 @@ class MahjongPuzzleApp:
         self.ui = UiState()
         self._new_session()
 
+    @property
+    def screen_width(self) -> int:
+        """選択中レイアウトの論理画面幅を返す。"""
+
+        if self.layout is LayoutMode.PORTRAIT:
+            return PORTRAIT_SCREEN_WIDTH
+        return SCREEN_WIDTH
+
+    @property
+    def screen_height(self) -> int:
+        """選択中レイアウトの論理画面高を返す。"""
+
+        if self.layout is LayoutMode.PORTRAIT:
+            return PORTRAIT_SCREEN_HEIGHT
+        return SCREEN_HEIGHT
+
+    @property
+    def board_origin_x(self) -> int:
+        """選択中レイアウトの盤面左端を返す。"""
+
+        if self.layout is LayoutMode.PORTRAIT:
+            return PORTRAIT_BOARD_ORIGIN_X
+        return BOARD_ORIGIN_X
+
+    @property
+    def board_origin_y(self) -> int:
+        """選択中レイアウトの盤面上端を返す。"""
+
+        if self.layout is LayoutMode.PORTRAIT:
+            return PORTRAIT_BOARD_ORIGIN_Y
+        return BOARD_ORIGIN_Y
+
+    def _centered_text_x(self, text: str) -> int:
+        return (self.screen_width - len(text) * 4) // 2
+
     def _new_session(self) -> None:
         self.session = GameSession.new(seed=self.seed)
         self.game: GameState = self.session.game
@@ -269,8 +319,8 @@ class MahjongPuzzleApp:
         """Pyxelウィンドウ、麻雀テーマ、仮スプライト、音を初期化する。"""
 
         pyxel.init(
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT,
+            self.screen_width,
+            self.screen_height,
             title="Mahjong Tile Puzzle",
             fps=30,
         )
@@ -402,6 +452,9 @@ class MahjongPuzzleApp:
             self._draw_notice()
 
     def _draw_title(self) -> None:
+        if self.layout is LayoutMode.PORTRAIT:
+            self._draw_portrait_title()
+            return
         pyxel.cls(COLOR_BACKGROUND)
         pyxel.rect(12, 12, 232, 152, COLOR_PANEL)
         pyxel.rectb(12, 12, 232, 152, COLOR_WOOD_EDGE)
@@ -458,8 +511,69 @@ class MahjongPuzzleApp:
             COLOR_MUTED,
         )
 
+    def _draw_portrait_title(self) -> None:
+        pyxel.cls(COLOR_BACKGROUND)
+        pyxel.rect(8, 10, 160, 236, COLOR_PANEL)
+        pyxel.rectb(8, 10, 160, 236, COLOR_WOOD_EDGE)
+        pyxel.rectb(12, 14, 152, 228, COLOR_MAHOGANY)
+        title = "MAHJONG TILE PUZZLE"
+        pyxel.text(self._centered_text_x(title), 42, title, COLOR_GOLD)
+        sample_types = (
+            TileType.honor_tile(Honor.EAST),
+            TileType.suited(Suit.PINZU, 5),
+            TileType.honor_tile(Honor.RED),
+        )
+        sample_width = (
+            len(sample_types) * TILE_SPRITE_SIZE
+            + (len(sample_types) - 1) * 2
+        )
+        sample_x = (self.screen_width - sample_width) // 2
+        for index, tile_type in enumerate(sample_types):
+            self._blt_tile(sample_x + index * 18, 75, tile_type)
+        tagline = "OVERWRITE. BUILD. WIN."
+        pyxel.text(self._centered_text_x(tagline), 112, tagline, COLOR_IVORY)
+        start_text = "A / START TO PLAY"
+        pyxel.text(
+            self._centered_text_x(start_text),
+            145,
+            start_text,
+            COLOR_BRIGHT_IVORY,
+        )
+        high_score_text = f"HIGH SCORE {self.high_score}"
+        pyxel.text(
+            self._centered_text_x(high_score_text),
+            174,
+            high_score_text,
+            COLOR_GOLD,
+        )
+        if self.persistence_error is not None:
+            error_text = "HIGH SCORE SAVE UNAVAILABLE"
+            pyxel.text(
+                self._centered_text_x(error_text),
+                191,
+                error_text,
+                COLOR_VERMILION,
+            )
+        pyxel.text(
+            self._centered_text_x("VIRTUAL PAD BELOW"),
+            218,
+            "VIRTUAL PAD BELOW",
+            COLOR_MUTED,
+        )
+
     def _draw_game(self) -> None:
         pyxel.cls(COLOR_BACKGROUND)
+        if self.layout is LayoutMode.PORTRAIT:
+            pyxel.text(
+                self._centered_text_x("MAHJONG TILE PUZZLE"),
+                4,
+                "MAHJONG TILE PUZZLE",
+                COLOR_IVORY,
+            )
+            self._draw_board()
+            self._draw_preview()
+            self._draw_mobile_status()
+            return
         pyxel.text(8, 6, "MAHJONG TILE PUZZLE", COLOR_IVORY)
         self._draw_board()
         self._draw_preview()
@@ -479,8 +593,8 @@ class MahjongPuzzleApp:
 
     def _draw_board(self) -> None:
         pyxel.rect(
-            BOARD_ORIGIN_X - 2,
-            BOARD_ORIGIN_Y - 2,
+            self.board_origin_x - 2,
+            self.board_origin_y - 2,
             BOARD_WIDTH * CELL_SIZE + 4,
             BOARD_HEIGHT * CELL_SIZE + 4,
             COLOR_MAHOGANY,
@@ -490,8 +604,8 @@ class MahjongPuzzleApp:
                 tile = self.game.board.tile_at(Coordinate(x, y))
                 self._draw_tile(
                     tile,
-                    BOARD_ORIGIN_X + x * CELL_SIZE,
-                    BOARD_ORIGIN_Y + y * CELL_SIZE,
+                    self.board_origin_x + x * CELL_SIZE,
+                    self.board_origin_y + y * CELL_SIZE,
                     preview=False,
                 )
 
@@ -502,8 +616,8 @@ class MahjongPuzzleApp:
     def _draw_positioned_cell(self, cell: PositionedCell) -> None:
         self._draw_tile(
             cell.tile,
-            BOARD_ORIGIN_X + cell.coordinate.x * CELL_SIZE,
-            BOARD_ORIGIN_Y + cell.coordinate.y * CELL_SIZE,
+            self.board_origin_x + cell.coordinate.x * CELL_SIZE,
+            self.board_origin_y + cell.coordinate.y * CELL_SIZE,
             preview=True,
         )
 
@@ -623,6 +737,84 @@ class MahjongPuzzleApp:
                 ),
             )
 
+    def _draw_mobile_status(self) -> None:
+        """縦画面の盤面下へ、プレイ中の情報をコンパクトに描画する。"""
+
+        panel_x, panel_y, panel_width, panel_height = 8, 152, 160, 98
+        pyxel.rect(
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height,
+            COLOR_PANEL,
+        )
+        pyxel.rectb(
+            panel_x,
+            panel_y,
+            panel_width,
+            panel_height,
+            COLOR_WOOD_EDGE,
+        )
+        pyxel.text(
+            13,
+            157,
+            f"TURN {self.game.turn:02d}/{TOTAL_TURN_COUNT:02d}",
+            COLOR_IVORY,
+        )
+        pyxel.text(
+            92,
+            157,
+            f"SCORE {self.session.total_score}",
+            COLOR_GOLD,
+        )
+        pyxel.text(
+            13,
+            167,
+            f"COMBO {self.session.turn_state.consecutive_win_turns}",
+            COLOR_IVORY,
+        )
+        current = self.game.current_block
+        current_name = "-" if current is None else current.kind.value
+        pyxel.text(92, 167, f"CURRENT {current_name}", COLOR_GOLD)
+
+        pyxel.text(13, 181, "DORA", COLOR_IVORY)
+        for index, indicator in enumerate(
+            self.game.visible_dora_indicators
+        ):
+            self._blt_tile(
+                34 + index * (TILE_SPRITE_SIZE + 1),
+                176,
+                indicator.kind,
+            )
+        last = self.session.last_turn
+        last_counts = (
+            "W0 K0"
+            if last is None
+            else f"W{len(last.wins)} K{len(last.kans)}"
+        )
+        pyxel.text(110, 181, f"LAST {last_counts}", COLOR_MUTED)
+
+        pyxel.text(13, 199, "NEXT", COLOR_IVORY)
+        for index, block in enumerate(self.game.next_blocks):
+            self._draw_next_block(
+                block,
+                x=43 + index * 39,
+                y=196,
+            )
+
+        pyxel.text(
+            13,
+            216,
+            f"RIVER {self.game.river.total_count}",
+            COLOR_MUTED,
+        )
+        for index, record in enumerate(self.game.river.recent(8)):
+            self._blt_tile(
+                24 + index * TILE_SPRITE_SIZE,
+                230,
+                record.tile.kind,
+            )
+
     def _draw_dora_indicators(self) -> None:
         pyxel.text(
             SIDEBAR_X,
@@ -658,7 +850,10 @@ class MahjongPuzzleApp:
         notice = self.ui.current_notice
         if notice is None:
             return
-        x, y, width, height = 42, 50, 172, 76
+        if self.layout is LayoutMode.PORTRAIT:
+            x, y, width, height = 6, 83, 164, 84
+        else:
+            x, y, width, height = 42, 50, 172, 76
         pyxel.rect(x, y, width, height, COLOR_INK)
         pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
         accent = (
@@ -672,9 +867,19 @@ class MahjongPuzzleApp:
         for index, line in enumerate(notice.lines):
             line_x = x + (width - len(line) * 4) // 2
             pyxel.text(line_x, y + 25 + index * 10, line, COLOR_IVORY)
-        pyxel.text(x + 34, y + 64, "ANY CONTROL TO CONTINUE", COLOR_MUTED)
+        continuation = "ANY CONTROL TO CONTINUE"
+        continuation_x = x + (width - len(continuation) * 4) // 2
+        pyxel.text(
+            continuation_x,
+            y + height - 12,
+            continuation,
+            COLOR_MUTED,
+        )
 
     def _draw_river_overlay(self) -> None:
+        if self.layout is LayoutMode.PORTRAIT:
+            self._draw_portrait_river_overlay()
+            return
         self._draw_overlay_panel("RIVER / FULL HISTORY")
         pyxel.text(
             12,
@@ -694,7 +899,32 @@ class MahjongPuzzleApp:
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
         pyxel.text(76, 153, "TAB / BACK / B CLOSE", COLOR_MUTED)
 
+    def _draw_portrait_river_overlay(self) -> None:
+        self._draw_overlay_panel("RIVER / FULL HISTORY")
+        pyxel.text(
+            12,
+            27,
+            f"TOTAL {self.game.river.total_count} / ONE ROW = ONE TURN",
+            COLOR_IVORY,
+        )
+        for index, record in enumerate(self.game.river.records):
+            turn = index // 4
+            slot = index % 4
+            column = turn // 9
+            row = turn % 9
+            x = 10 + column * 82 + slot * 13
+            y = 38 + row * 22
+            pyxel.rect(x, y, 12, 16, COLOR_IVORY)
+            pyxel.rectb(x, y, 12, 16, COLOR_WOOD_EDGE)
+            label = tile_label(record.tile.kind)
+            label_x = x + (12 - len(label) * 4) // 2
+            pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
+        pyxel.text(38, 239, "BACK / B CLOSE", COLOR_MUTED)
+
     def _draw_yaku_overlay(self) -> None:
+        if self.layout is LayoutMode.PORTRAIT:
+            self._draw_portrait_yaku_overlay()
+            return
         self._draw_overlay_panel("YAKU LIST")
         acquired = {
             yaku
@@ -711,14 +941,40 @@ class MahjongPuzzleApp:
         pyxel.text(14, 146, "* ACQUIRED ON AT LEAST ONE ROW", COLOR_MUTED)
         pyxel.text(98, 158, "Y / B CLOSE", COLOR_MUTED)
 
-    @staticmethod
-    def _draw_overlay_panel(title: str) -> None:
-        pyxel.rect(5, 8, 246, 160, COLOR_INK)
-        pyxel.rectb(5, 8, 246, 160, COLOR_WOOD_EDGE)
-        pyxel.rectb(8, 11, 240, 154, COLOR_MAHOGANY)
+    def _draw_portrait_yaku_overlay(self) -> None:
+        self._draw_overlay_panel("YAKU LIST")
+        acquired = {
+            yaku
+            for state in self.session.line_states
+            for yaku in state.acquired_yaku
+        }
+        for index, yaku in enumerate(Yaku):
+            y = 39 + index * 22
+            marker = "*" if yaku in acquired else "-"
+            points = DEFAULT_SCORING_CONFIG.yaku_points[yaku]
+            marker_color = COLOR_GOLD if marker == "*" else COLOR_MUTED
+            pyxel.text(17, y, marker, marker_color)
+            pyxel.text(29, y, _YAKU_SCREEN_NAMES[yaku], COLOR_IVORY)
+            pyxel.text(142, y, f"{points:>3}", COLOR_GOLD)
+        pyxel.text(15, 218, "* ACQUIRED ON A ROW", COLOR_MUTED)
+        pyxel.text(58, 238, "Y / B CLOSE", COLOR_MUTED)
+
+    def _draw_overlay_panel(self, title: str) -> None:
+        if self.layout is LayoutMode.PORTRAIT:
+            pyxel.cls(COLOR_BACKGROUND)
+            pyxel.rect(5, 8, 166, 240, COLOR_INK)
+            pyxel.rectb(5, 8, 166, 240, COLOR_WOOD_EDGE)
+            pyxel.rectb(8, 11, 160, 234, COLOR_MAHOGANY)
+        else:
+            pyxel.rect(5, 8, 246, 160, COLOR_INK)
+            pyxel.rectb(5, 8, 246, 160, COLOR_WOOD_EDGE)
+            pyxel.rectb(8, 11, 240, 154, COLOR_MAHOGANY)
         pyxel.text(12, 16, title, COLOR_GOLD)
 
     def _draw_result(self) -> None:
+        if self.layout is LayoutMode.PORTRAIT:
+            self._draw_portrait_result()
+            return
         pyxel.cls(COLOR_BACKGROUND)
         summary = GameSummary.from_session(self.session)
         pyxel.rect(28, 14, 200, 148, COLOR_PANEL)
@@ -740,6 +996,48 @@ class MahjongPuzzleApp:
         pyxel.text(76, 141, "R/A/START AGAIN  ESC QUIT", COLOR_BRIGHT_IVORY)
         if self.persistence_error is not None:
             pyxel.text(64, 151, "HIGH SCORE SAVE FAILED", COLOR_VERMILION)
+
+    def _draw_portrait_result(self) -> None:
+        pyxel.cls(COLOR_BACKGROUND)
+        summary = GameSummary.from_session(self.session)
+        pyxel.rect(12, 18, 152, 220, COLOR_PANEL)
+        pyxel.rectb(12, 18, 152, 220, COLOR_WOOD_EDGE)
+        pyxel.rectb(15, 21, 146, 214, COLOR_MAHOGANY)
+        pyxel.text(
+            self._centered_text_x("GAME RESULT"),
+            39,
+            "GAME RESULT",
+            COLOR_GOLD,
+        )
+        result_lines = (
+            (f"FINAL SCORE  {summary.total_score}", COLOR_IVORY),
+            (f"HIGH SCORE   {self.high_score}", COLOR_GOLD),
+            (f"TURNS        {summary.turns}", COLOR_IVORY),
+            (f"WINS         {summary.win_count}", COLOR_IVORY),
+            (f"KANS         {summary.kan_count}", COLOR_IVORY),
+            (
+                f"YAKU TYPES   {len(summary.acquired_yaku)}",
+                COLOR_IVORY,
+            ),
+            (f"RIVER TILES  {summary.river_count}", COLOR_IVORY),
+        )
+        for index, (line, color) in enumerate(result_lines):
+            pyxel.text(39, 68 + index * 16, line, color)
+        restart = "A / START: AGAIN"
+        pyxel.text(
+            self._centered_text_x(restart),
+            198,
+            restart,
+            COLOR_BRIGHT_IVORY,
+        )
+        if self.persistence_error is not None:
+            error_text = "HIGH SCORE SAVE FAILED"
+            pyxel.text(
+                self._centered_text_x(error_text),
+                217,
+                error_text,
+                COLOR_VERMILION,
+            )
 
 
 def main() -> None:

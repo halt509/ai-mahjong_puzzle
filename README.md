@@ -48,15 +48,26 @@ mahjong-puzzle
 python scripts\build_web.py
 ```
 
-生成物は`web/mahjong-puzzle.pyxapp`です。ゲームの実行に必要なPythonコードだけを含み、テスト、仕様書、開発用指示、コンセプト画像は含みません。ただし`.pyxapp`はZIP形式のため、同梱したゲームソースは閲覧可能です。
+次の2つを生成します。
 
-このリポジトリの`main`ブランチへ生成物をpushし、GitHubから公開取得できる状態にすると、次のURLで起動できます。
+- `web/mahjong-puzzle.pyxapp`: PC向け横画面（256×176）
+- `web/mahjong-puzzle-mobile.pyxapp`: スマートフォン向け縦画面（176×256）
+
+どちらもゲームの実行に必要なPythonコードだけを含み、テスト、仕様書、開発用指示、コンセプト画像は含みません。ただし`.pyxapp`はZIP形式のため、同梱したゲームソースは閲覧可能です。
+
+このリポジトリの`main`ブランチへ生成物をpushし、GitHubから公開取得できる状態にすると、PC版は次のURLで起動できます。
 
 ```text
-https://kitao.github.io/pyxel/wasm/launcher/?play=halt509.ai-mahjong_puzzle.web.mahjong-puzzle&gamepad=enabled
+https://kitao.github.io/pyxel/wasm/launcher/?play=halt509/ai-mahjong_puzzle/main/web/mahjong-puzzle&gamepad=enabled
 ```
 
-PCでは従来どおりキーボードで操作できます。タッチ端末ではPyxel Web Launcherのバーチャルゲームパッドが表示され、同じ`.pyxapp`をスマートフォンやタブレットから操作できます。現在の画面は横長256×176のため、スマートフォンは横向き推奨です。縦画面専用レイアウトと盤面への直接タッチ操作は対象外です。
+スマートフォン縦画面版は次のURLです。
+
+```text
+https://kitao.github.io/pyxel/wasm/launcher/?play=halt509/ai-mahjong_puzzle/main/web/mahjong-puzzle-mobile&gamepad=enabled
+```
+
+PC版は従来どおりキーボードで操作できます。スマートフォン版は盤面を上、得点・ドラ・NEXT・川を下にまとめ、Pyxel Web Launcherのバーチャルゲームパッドで操作します。ルール、ゲーム状態、入力、牌スプライト、ハイスコア保存は共通です。盤面への直接タッチ操作は対象外です。
 
 Web版のハイスコアはブラウザの`localStorage`へ保存します。保存キーは`ai_mahjong_puzzle.high_score`です。同じブラウザと同じWeb Launcherオリジンでは再読込後も残りますが、ブラウザデータの削除やプライベートブラウズでは失われる場合があります。ランキングや端末間同期は行いません。デスクトップ版は従来どおりローカルJSONを使用します。
 
@@ -89,7 +100,7 @@ Web版のハイスコアはブラウザの`localStorage`へ保存します。保
 
 タイトル画面は`Space`または`Enter`で開始します。カン・和了通知が出ている間は、いずれかの操作キーで通知だけを閉じます。その入力は盤面操作には使わず、次の入力から通常操作へ戻るため、意図しない配置を防げます。
 
-サイドバーには次を表示します。
+ゲーム情報欄には次を表示します。PC版では盤面右、スマートフォン版では盤面下に配置します。
 
 - `SCORE`: 累計得点
 - `COMBO`: 連続和了ターン数
@@ -176,8 +187,9 @@ python -m mahjong_puzzle.sample
 - `ui.py`: タイトル、オーバーレイ、通知、結果への画面状態
 - `sprites.py`: 34種の固定アトラス座標と交換可能な仮牌生成
 - `persistence.py`: ローカルハイスコアの検証・保存
-- `web_main.py`: Pyxel Web Launcher用の引数なし起動エントリ
-- `app.py`: 麻雀テーマのPyxel描画、入力、効果音の画面アダプター
+- `web_main.py`: PC横画面版のPyxel Web Launcher起動エントリ
+- `mobile_web_main.py`: スマートフォン縦画面版のPyxel Web Launcher起動エントリ
+- `app.py`: 共通ゲーム操作と横・縦レイアウトを持つPyxel画面アダプター
 
 ## 仮点数
 

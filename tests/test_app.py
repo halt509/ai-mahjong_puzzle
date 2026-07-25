@@ -9,12 +9,17 @@ from mahjong_puzzle.app import (
     NEXT_START_OFFSET_Y,
     PLACEMENT_KNOCK_SOUND,
     PLACEMENT_RATTLE_SOUND,
+    PORTRAIT_BOARD_ORIGIN_X,
+    PORTRAIT_BOARD_ORIGIN_Y,
+    PORTRAIT_SCREEN_HEIGHT,
+    PORTRAIT_SCREEN_WIDTH,
     SIDEBAR_HEIGHT,
     TITLE_INNER_HEIGHT,
     TITLE_INNER_Y,
     TITLE_QUIT_Y,
     TITLE_TEXT_Y,
     ControlAction,
+    LayoutMode,
     MahjongPuzzleApp,
     centered_text_x,
     tile_label,
@@ -65,6 +70,49 @@ def test_app_construction_does_not_start_pyxel_loop() -> None:
     assert app.session.game is app.game
     assert app.game.turn == 0
     assert not app.game.is_game_over
+
+
+def test_portrait_layout_uses_mobile_screen_and_centered_board() -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+
+    assert app.screen_width == PORTRAIT_SCREEN_WIDTH == 176
+    assert app.screen_height == PORTRAIT_SCREEN_HEIGHT == 256
+    assert app.board_origin_x == PORTRAIT_BOARD_ORIGIN_X == 24
+    assert app.board_origin_y == PORTRAIT_BOARD_ORIGIN_Y == 18
+    assert PORTRAIT_BOARD_ORIGIN_X * 2 + 8 * 16 == PORTRAIT_SCREEN_WIDTH
+
+
+def test_landscape_layout_keeps_existing_dimensions_and_board_origin() -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+
+    assert app.layout is LayoutMode.LANDSCAPE
+    assert app.screen_width == 256
+    assert app.screen_height == 176
+    assert app.board_origin_x == 8
+    assert app.board_origin_y == 24
+
+
+def test_portrait_game_uses_mobile_status_instead_of_sidebar(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+    calls: list[str] = []
+    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    monkeypatch.setattr(pyxel, "text", lambda *args: None)
+    monkeypatch.setattr(app, "_draw_board", lambda: calls.append("board"))
+    monkeypatch.setattr(app, "_draw_preview", lambda: calls.append("preview"))
+    monkeypatch.setattr(
+        app,
+        "_draw_mobile_status",
+        lambda: calls.append("mobile_status"),
+    )
+    monkeypatch.setattr(
+        app,
+        "_draw_sidebar",
+        lambda: calls.append("sidebar"),
+    )
+
+    app._draw_game()
+
+    assert calls == ["board", "preview", "mobile_status"]
 
 
 def test_all_three_next_previews_fit_inside_sidebar() -> None:

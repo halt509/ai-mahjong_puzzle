@@ -4,6 +4,7 @@ from zipfile import ZipFile
 
 PROJECT_ROOT = Path(__file__).parents[1]
 WEB_APP = PROJECT_ROOT / "web" / "mahjong-puzzle.pyxapp"
+MOBILE_WEB_APP = PROJECT_ROOT / "web" / "mahjong-puzzle-mobile.pyxapp"
 
 
 def test_web_app_contains_only_runtime_source() -> None:
@@ -43,3 +44,24 @@ def test_web_app_contains_mobile_gamepad_bindings() -> None:
     assert "GAMEPAD1_BUTTON_DPAD_LEFT" in app_source
     assert "GAMEPAD1_BUTTON_A" in app_source
     assert "GAMEPAD1_BUTTON_BACK" in app_source
+
+
+def test_mobile_web_app_uses_portrait_entry_and_runtime_source() -> None:
+    assert MOBILE_WEB_APP.is_file()
+
+    with ZipFile(MOBILE_WEB_APP) as archive:
+        names = set(archive.namelist())
+        startup = archive.read(
+            "mahjong-puzzle-mobile/.pyxapp_startup_script"
+        ).decode("utf-8")
+        entry_source = archive.read(
+            "mahjong-puzzle-mobile/mobile_web_main.py"
+        ).decode("utf-8")
+
+    assert startup == "mobile_web_main.py"
+    assert "LayoutMode.PORTRAIT" in entry_source
+    assert "mahjong-puzzle-mobile/mahjong_puzzle/app.py" in names
+    assert not any(
+        name.startswith(("tests/", "docs/", "assets/", ".git/"))
+        for name in names
+    )
