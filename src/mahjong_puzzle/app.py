@@ -1,9 +1,10 @@
-"""フェーズ4の画面・通知・音をルール状態へ接続するPyxelアプリ。"""
+"""フェーズ5の役一覧を含む画面・通知・音のPyxelアプリ。"""
 
 from __future__ import annotations
 
 import argparse
 from enum import Enum
+from pathlib import Path
 
 import pyxel
 
@@ -26,7 +27,8 @@ from mahjong_puzzle.sprites import (
 from mahjong_puzzle.tetromino import PositionedCell, Tetromino
 from mahjong_puzzle.tiles import Honor, Suit, Tile, TileType
 from mahjong_puzzle.ui import GameSummary, NoticeKind, ScreenMode, UiState
-from mahjong_puzzle.yaku import Yaku
+from mahjong_puzzle.yaku import YAKU_DISPLAY_NAMES, Yaku
+from mahjong_puzzle.yaku_catalog import YAKU_GUIDE_ENTRIES
 
 SCREEN_WIDTH = 256
 SCREEN_HEIGHT = 176
@@ -118,16 +120,7 @@ _HONOR_LABELS = {
     Honor.GREEN: "F",
     Honor.RED: "C",
 }
-_YAKU_SCREEN_NAMES = {
-    Yaku.ALL_SEQUENCES: "ALL SEQUENCES",
-    Yaku.ALL_TRIPLETS: "ALL TRIPLETS",
-    Yaku.TANYAO: "TANYAO",
-    Yaku.IIPEIKOU: "IIPEIKOU",
-    Yaku.HONITSU: "HONITSU",
-    Yaku.CHINITSU: "CHINITSU",
-    Yaku.HONROUTOU: "HONROUTOU",
-    Yaku.YAKUHAI: "YAKUHAI",
-}
+JAPANESE_FONT_RELATIVE_PATH = Path("assets/fonts/umplus_j10r.bdf")
 
 
 class ControlAction(str, Enum):
@@ -261,6 +254,8 @@ class MahjongPuzzleApp:
             raise TypeError("layoutにはLayoutModeが必要です")
         self.seed = seed
         self.layout = layout
+        self._japanese_font: pyxel.Font | None = None
+        self._yaku_page = 0
         self.high_score_store = (
             high_score_store
             if high_score_store is not None
@@ -310,6 +305,12 @@ class MahjongPuzzleApp:
     def _centered_text_x(self, text: str) -> int:
         return (self.screen_width - len(text) * 4) // 2
 
+    @property
+    def yaku_page(self) -> int:
+        """役一覧で現在表示している0始まりページを返す。"""
+
+        return self._yaku_page
+
     def _new_session(self) -> None:
         self.session = GameSession.new(seed=self.seed)
         self.game: GameState = self.session.game
@@ -324,10 +325,27 @@ class MahjongPuzzleApp:
             title="Mahjong Tile Puzzle",
             fps=30,
         )
+        self._japanese_font = pyxel.Font(self._resolve_japanese_font_path())
         self._configure_palette()
         build_placeholder_tile_atlas(pyxel.images[TILE_IMAGE_BANK])
         self._configure_sounds()
         pyxel.run(self.update, self.draw)
+
+    @staticmethod
+    def _resolve_japanese_font_path() -> str:
+        source_root = Path(__file__).resolve().parents[2]
+        packaged_root = Path(__file__).resolve().parents[1]
+        candidates = (
+            source_root / JAPANESE_FONT_RELATIVE_PATH,
+            packaged_root / JAPANESE_FONT_RELATIVE_PATH,
+            Path.cwd() / JAPANESE_FONT_RELATIVE_PATH,
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+        raise FileNotFoundError(
+            f"日本語フォントが見つかりません: {JAPANESE_FONT_RELATIVE_PATH}"
+        )
 
     @staticmethod
     def _configure_palette() -> None:
@@ -376,7 +394,15 @@ class MahjongPuzzleApp:
             return
 
         if self.ui.screen is ScreenMode.YAKU:
-            if self._action_pressed(
+            if self._action_pressed(ControlAction.MOVE_LEFT):
+                self._yaku_page = (
+                    self._yaku_page - 1
+                ) % len(YAKU_GUIDE_ENTRIES)
+            elif self._action_pressed(ControlAction.MOVE_RIGHT):
+                self._yaku_page = (
+                    self._yaku_page + 1
+                ) % len(YAKU_GUIDE_ENTRIES)
+            elif self._action_pressed(
                 ControlAction.TOGGLE_YAKU
             ) or self._action_pressed(ControlAction.CANCEL):
                 self.ui.close_overlay()
@@ -397,6 +423,7 @@ class MahjongPuzzleApp:
             self.ui.open_overlay(ScreenMode.RIVER)
             return
         if self._action_pressed(ControlAction.TOGGLE_YAKU):
+            self._yaku_page = 0
             self.ui.open_overlay(ScreenMode.YAKU)
             return
         if self._action_pressed(ControlAction.MOVE_LEFT):
@@ -924,46 +951,95 @@ class MahjongPuzzleApp:
         pyxel.text(38, 239, "BACK / B CLOSE", COLOR_MUTED)
 
     def _draw_yaku_overlay(self) -> None:
+        self._draw_overlay_panel("YAKU GUIDE")
+        if self._japanese_font is None:
+            raise RuntimeError("日本語フォントが初期化されていません")
+        entry = YAKU_GUIDE_ENTRIES[self._yaku_page]
+        acquired = {
+            yaku
+            for state in self.session.line_states
+            for yaku in state.acquired_yaku
+        }
+        page_label = f"{self._yaku_page + 1}/{len(YAKU_GUIDE_ENTRIES)}"
         if self.layout is LayoutMode.PORTRAIT:
-            self._draw_portrait_yaku_overlay()
-            return
-        self._draw_overlay_panel("YAKU LIST")
-        acquired = {
-            yaku
-            for state in self.session.line_states
-            for yaku in state.acquired_yaku
-        }
-        for index, yaku in enumerate(Yaku):
-            y = 31 + index * 14
-            marker = "*" if yaku in acquired else "-"
-            points = DEFAULT_SCORING_CONFIG.yaku_points[yaku]
-            pyxel.text(18, y, marker, COLOR_GOLD if marker == "*" else COLOR_MUTED)
-            pyxel.text(30, y, _YAKU_SCREEN_NAMES[yaku], COLOR_IVORY)
-            pyxel.text(190, y, f"{points:>3}", COLOR_GOLD)
-        pyxel.text(14, 146, "* ACQUIRED ON AT LEAST ONE ROW", COLOR_MUTED)
-        pyxel.text(98, 158, "Y / B CLOSE", COLOR_MUTED)
-
-    def _draw_portrait_yaku_overlay(self) -> None:
-        self._draw_overlay_panel("YAKU LIST")
-        acquired = {
-            yaku
-            for state in self.session.line_states
-            for yaku in state.acquired_yaku
-        }
-        for index, yaku in enumerate(Yaku):
-            y = 39 + index * 22
-            marker = "*" if yaku in acquired else "-"
-            points = DEFAULT_SCORING_CONFIG.yaku_points[yaku]
-            marker_color = COLOR_GOLD if marker == "*" else COLOR_MUTED
-            pyxel.text(17, y, marker, marker_color)
-            pyxel.text(29, y, _YAKU_SCREEN_NAMES[yaku], COLOR_IVORY)
-            pyxel.text(142, y, f"{points:>3}", COLOR_GOLD)
-        pyxel.text(15, 218, "* ACQUIRED ON A ROW", COLOR_MUTED)
-        pyxel.text(58, 238, "Y / B CLOSE", COLOR_MUTED)
+            name_y, reading_y, description_y = 36, 53, 78
+            example_label_y, example_y = 101, 116
+            acquired_y, navigation_y = 145, 235
+            text_x, points_x = 13, 128
+        else:
+            name_y, reading_y, description_y = 33, 49, 66
+            example_label_y, example_y = 82, 96
+            acquired_y, navigation_y = 122, 153
+            text_x, points_x = 18, 198
+        pyxel.text(
+            self.screen_width - len(page_label) * 4 - 12,
+            16,
+            page_label,
+            COLOR_GOLD,
+        )
+        pyxel.text(
+            text_x,
+            name_y,
+            YAKU_DISPLAY_NAMES[entry.yaku],
+            COLOR_GOLD,
+            self._japanese_font,
+        )
+        pyxel.text(
+            text_x,
+            reading_y,
+            entry.reading,
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+        pyxel.text(
+            points_x,
+            name_y + 2,
+            f"{DEFAULT_SCORING_CONFIG.yaku_points[entry.yaku]}点",
+            COLOR_GOLD,
+            self._japanese_font,
+        )
+        pyxel.text(
+            text_x,
+            description_y,
+            entry.description,
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        pyxel.text(
+            text_x,
+            example_label_y,
+            "成立例",
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+        example_x = (self.screen_width - 8 * TILE_SPRITE_SIZE) // 2
+        for index, tile_type in enumerate(entry.example_tiles):
+            self._blt_tile(
+                example_x + index * TILE_SPRITE_SIZE,
+                example_y,
+                tile_type,
+            )
+        acquired_label = (
+            "取得済み" if entry.yaku in acquired else "未取得"
+        )
+        pyxel.text(
+            text_x,
+            acquired_y,
+            acquired_label,
+            COLOR_GOLD if entry.yaku in acquired else COLOR_MUTED,
+            self._japanese_font,
+        )
+        navigation = "< >: PAGE   Y / B: CLOSE"
+        pyxel.text(
+            self._centered_text_x(navigation),
+            navigation_y,
+            navigation,
+            COLOR_MUTED,
+        )
 
     def _draw_overlay_panel(self, title: str) -> None:
+        pyxel.cls(COLOR_BACKGROUND)
         if self.layout is LayoutMode.PORTRAIT:
-            pyxel.cls(COLOR_BACKGROUND)
             pyxel.rect(5, 8, 166, 240, COLOR_INK)
             pyxel.rectb(5, 8, 166, 240, COLOR_WOOD_EDGE)
             pyxel.rectb(8, 11, 160, 234, COLOR_MAHOGANY)

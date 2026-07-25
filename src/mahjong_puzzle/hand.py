@@ -72,6 +72,29 @@ class HandDecomposition:
         return (self.pair.sort_key, tuple(meld.sort_key for meld in self.melds))
 
 
+@dataclass(frozen=True)
+class FourPairsDecomposition:
+    """4種類の牌を2枚ずつ使う特殊和了形。"""
+
+    pairs: tuple[TileType, TileType, TileType, TileType]
+
+    def __post_init__(self) -> None:
+        if len(self.pairs) != 4:
+            raise ValueError("四対子には4種類の対子が必要です")
+        if not all(isinstance(pair, TileType) for pair in self.pairs):
+            raise ValueError("pairsにはTileTypeが必要です")
+        if len(set(self.pairs)) != 4:
+            raise ValueError("四対子では同じ牌種を複数の対子に使えません")
+        object.__setattr__(self, "pairs", tuple(sorted(self.pairs)))
+
+    @property
+    def sort_key(self) -> tuple[tuple[int, int], ...]:
+        return tuple(pair.sort_key for pair in self.pairs)
+
+
+WinningDecomposition = HandDecomposition | FourPairsDecomposition
+
+
 def _sequence_from_first(first: TileType) -> tuple[TileType, TileType, TileType] | None:
     if not first.is_suited or first.rank is None or first.rank > 7:
         return None
@@ -132,3 +155,20 @@ def enumerate_decompositions(tiles: Iterable[TileLike]) -> tuple[HandDecompositi
         for melds in _enumerate_melds(counts, remaining_melds=2):
             results.add(HandDecomposition(melds=(melds[0], melds[1]), pair=pair))
     return tuple(sorted(results, key=lambda decomposition: decomposition.sort_key))
+
+
+def find_four_pairs_decomposition(
+    tiles: Iterable[TileLike],
+) -> FourPairsDecomposition | None:
+    """8牌が4種類×2枚なら四対子分解を返す。
+
+    同一牌4枚は2組の対子として扱わない。
+    """
+
+    kinds = normalize_tile_types(tiles)
+    if len(kinds) != 8:
+        raise ValueError(f"四対子判定には8枚必要です（入力: {len(kinds)}枚）")
+    counts = Counter(kinds)
+    if len(counts) != 4 or any(count != 2 for count in counts.values()):
+        return None
+    return FourPairsDecomposition(tuple(sorted(counts)))

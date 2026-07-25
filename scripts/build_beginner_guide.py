@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -18,9 +17,13 @@ from mahjong_puzzle.scoring import DEFAULT_SCORING_CONFIG
 from mahjong_puzzle.sprites import TILE_SPRITE_SIZE, tile_sprite_uv
 from mahjong_puzzle.tiles import Honor, Suit, TileType
 from mahjong_puzzle.yaku import YAKU_DISPLAY_NAMES, Yaku, evaluate_hand
+from mahjong_puzzle.yaku_catalog import (
+    YAKU_GUIDE_ENTRIES,
+    YakuGuideEntry,
+)
 
 WIDTH = 1600
-HEIGHT = 2400
+HEIGHT = 3300
 MARGIN = 64
 CARD_GAP = 28
 OUTPUT_PATH = ROOT / "assets" / "guides" / "beginner-guide-ja.png"
@@ -50,75 +53,8 @@ def honors(honor: Honor, count: int) -> tuple[TileType, ...]:
     return tuple(TileType.honor_tile(honor) for _ in range(count))
 
 
-@dataclass(frozen=True)
-class YakuCard:
-    yaku: Yaku
-    reading: str
-    description: str
-    tiles: tuple[TileType, ...]
-
-
-YAKU_CARDS = (
-    YakuCard(
-        Yaku.ALL_SEQUENCES,
-        "ぜんしゅんつ",
-        "2つの3枚組が、両方とも同じ種類の連番",
-        suited(Suit.MANZU, 1, 2, 3)
-        + suited(Suit.PINZU, 4, 5, 6)
-        + honors(Honor.EAST, 2),
-    ),
-    YakuCard(
-        Yaku.ALL_TRIPLETS,
-        "ぜんこうつ",
-        "2つの3枚組が、両方とも同じ牌3枚",
-        suited(Suit.MANZU, 1, 1, 1)
-        + suited(Suit.PINZU, 5, 5, 5)
-        + honors(Honor.SOUTH, 2),
-    ),
-    YakuCard(
-        Yaku.TANYAO,
-        "たんやお",
-        "8牌すべてが2〜8の数牌",
-        suited(Suit.MANZU, 2, 3, 4)
-        + suited(Suit.PINZU, 5, 6, 7)
-        + suited(Suit.SOUZU, 8, 8),
-    ),
-    YakuCard(
-        Yaku.IIPEIKOU,
-        "いーぺーこー",
-        "まったく同じ順子を2組つくる",
-        suited(Suit.MANZU, 2, 3, 4, 2, 3, 4)
-        + suited(Suit.PINZU, 5, 5),
-    ),
-    YakuCard(
-        Yaku.HONITSU,
-        "ほんいつ",
-        "1種類の数牌と字牌だけでそろえる",
-        suited(Suit.MANZU, 1, 2, 3, 7, 8, 9) + honors(Honor.EAST, 2),
-    ),
-    YakuCard(
-        Yaku.CHINITSU,
-        "ちんいつ",
-        "1種類の数牌だけでそろえる",
-        suited(Suit.PINZU, 1, 2, 3, 4, 5, 6, 9, 9),
-    ),
-    YakuCard(
-        Yaku.HONROUTOU,
-        "ほんろーとー",
-        "8牌すべてが1・9・字牌",
-        suited(Suit.MANZU, 1, 1, 1)
-        + suited(Suit.PINZU, 9, 9, 9)
-        + honors(Honor.NORTH, 2),
-    ),
-    YakuCard(
-        Yaku.YAKUHAI,
-        "やくはい",
-        "白・發・中のどれかを3枚そろえる",
-        honors(Honor.GREEN, 3)
-        + suited(Suit.MANZU, 4, 5, 6)
-        + suited(Suit.PINZU, 9, 9),
-    ),
-)
+YakuCard = YakuGuideEntry
+YAKU_CARDS = YAKU_GUIDE_ENTRIES
 
 
 def _font_path(*, bold: bool) -> Path:
@@ -217,9 +153,9 @@ def draw_tiles(
 
 def validate_examples() -> None:
     for card in YAKU_CARDS:
-        if len(card.tiles) != 8:
+        if len(card.example_tiles) != 8:
             raise ValueError(f"{YAKU_DISPLAY_NAMES[card.yaku]}の例は8牌必要です")
-        evaluations = evaluate_hand(card.tiles)
+        evaluations = evaluate_hand(card.example_tiles)
         if not evaluations or not any(card.yaku in item.yaku for item in evaluations):
             raise ValueError(
                 f"{YAKU_DISPLAY_NAMES[card.yaku]}の例が実際の判定で成立しません"
@@ -369,7 +305,15 @@ def draw_yaku_card(
         font=font(22, bold=True),
         fill=IVORY,
     )
-    draw_tiles(canvas, atlas, card.tiles, x=x1 + 29, y=y1 + 158, scale=4, gap=4)
+    draw_tiles(
+        canvas,
+        atlas,
+        card.example_tiles,
+        x=x1 + 29,
+        y=y1 + 158,
+        scale=4,
+        gap=4,
+    )
 
 
 def draw_yaku_list(
@@ -377,7 +321,12 @@ def draw_yaku_list(
     draw: ImageDraw.ImageDraw,
     atlas: Image.Image,
 ) -> None:
-    draw.text((MARGIN, 732), "このゲームの役 8種類", font=font(43, bold=True), fill=GOLD)
+    draw.text(
+        (MARGIN, 732),
+        f"このゲームの役 {len(YAKU_CARDS)}種類",
+        font=font(43, bold=True),
+        fill=GOLD,
+    )
     draw.text(
         (MARGIN + 475, 747),
         "※例では、ほかの役も同時に成立することがあります",
@@ -404,10 +353,10 @@ def draw_yaku_list(
 
 
 def draw_footer(draw: ImageDraw.ImageDraw) -> None:
-    panel_y1 = 1940
-    rounded_panel(draw, (MARGIN, panel_y1, WIDTH - MARGIN, 2310), fill=TABLE)
+    panel_y1 = 2770
+    rounded_panel(draw, (MARGIN, panel_y1, WIDTH - MARGIN, 3240), fill=TABLE)
     divider_x = 1000
-    draw.line((divider_x, panel_y1 + 36, divider_x, 2272), fill=WOOD_EDGE, width=4)
+    draw.line((divider_x, panel_y1 + 36, divider_x, 3202), fill=WOOD_EDGE, width=4)
 
     draw.text(
         (96, panel_y1 + 34),
@@ -416,7 +365,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
         fill=GOLD,
     )
     rules = (
-        "● 役が1つ以上ある「3＋3＋2」で和了",
+        "● 役がある「3＋3＋2」または四対子で和了",
         "● 同じ行は、新しい役を作ればもう一度和了できる",
         "● 同じ牌4枚でカン。ドラ表示牌が増える",
         "● ドラは加点だけ。ドラだけでは和了できない",
@@ -463,13 +412,13 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
         draw.text((1290, y + 3), action, font=font(21, bold=True), fill=IVORY)
 
     draw.text(
-        (MARGIN, 2340),
+        (MARGIN, 3160),
         "※一般的な麻雀を8牌向けにアレンジした独自ルールです。点数は現在の仮設定です。",
         font=font(21),
         fill=MUTED,
     )
     draw.text(
-        (WIDTH - MARGIN, 2372),
+        (WIDTH - MARGIN, 3192),
         "更新: 2026-07-25 / AI: GPT-5",
         font=font(17),
         fill=MUTED,

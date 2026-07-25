@@ -27,6 +27,8 @@ from mahjong_puzzle.app import (
 from mahjong_puzzle.tetromino import Tetromino, TetrominoKind
 from mahjong_puzzle.tiles import Honor, Suit, TileType, create_full_tile_set
 from mahjong_puzzle.ui import Notice, NoticeKind, ScreenMode, UiState
+from mahjong_puzzle.yaku import YAKU_DISPLAY_NAMES
+from mahjong_puzzle.yaku_catalog import YAKU_GUIDE_ENTRIES
 
 
 def test_ascii_tile_labels_cover_suits_and_honors() -> None:
@@ -131,6 +133,53 @@ def test_mobile_status_always_shows_essential_controls(monkeypatch) -> None:
 
     assert "A: PLACE" in texts
     assert "X/B: ROTATE" in texts
+
+
+def test_yaku_overlay_changes_page_with_left_and_right(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.YAKU)
+    pressed = {pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT}
+    monkeypatch.setattr(pyxel, "btnp", lambda key: key in pressed)
+
+    app.update()
+
+    assert app.yaku_page == 1
+
+    pressed.clear()
+    pressed.add(pyxel.GAMEPAD1_BUTTON_DPAD_LEFT)
+    app.update()
+
+    assert app.yaku_page == 0
+
+
+def test_yaku_overlay_draws_japanese_details_and_tile_example(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app._japanese_font = object()
+    texts: list[str] = []
+    tiles: list[TileType] = []
+    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(
+        pyxel,
+        "text",
+        lambda _x, _y, text, _color, *args: texts.append(text),
+    )
+    monkeypatch.setattr(
+        app,
+        "_blt_tile",
+        lambda _x, _y, tile_type: tiles.append(tile_type),
+    )
+
+    app._draw_yaku_overlay()
+
+    entry = YAKU_GUIDE_ENTRIES[0]
+    assert YAKU_DISPLAY_NAMES[entry.yaku] in texts
+    assert entry.reading in texts
+    assert entry.description in texts
+    assert tiles == list(entry.example_tiles)
 
 
 def test_all_three_next_previews_fit_inside_sidebar() -> None:

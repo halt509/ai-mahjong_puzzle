@@ -5,6 +5,7 @@ from zipfile import ZipFile
 PROJECT_ROOT = Path(__file__).parents[1]
 WEB_APP = PROJECT_ROOT / "web" / "mahjong-puzzle.pyxapp"
 MOBILE_WEB_APP = PROJECT_ROOT / "web" / "mahjong-puzzle-mobile.pyxapp"
+JAPANESE_FONT = PROJECT_ROOT / "assets" / "fonts" / "umplus_j10r.bdf"
 
 
 def test_web_app_contains_only_runtime_source() -> None:
@@ -65,3 +66,16 @@ def test_mobile_web_app_uses_portrait_entry_and_runtime_source() -> None:
         name.startswith(("tests/", "docs/", "assets/", ".git/"))
         for name in names
     )
+
+
+def test_japanese_font_is_in_source_and_both_web_apps() -> None:
+    assert JAPANESE_FONT.is_file()
+
+    for web_app, root in (
+        (WEB_APP, "mahjong-puzzle"),
+        (MOBILE_WEB_APP, "mahjong-puzzle-mobile"),
+    ):
+        with ZipFile(web_app) as archive:
+            names = set(archive.namelist())
+        assert f"{root}/assets/fonts/umplus_j10r.bdf" in names
+        assert f"{root}/assets/fonts/README.md" in names

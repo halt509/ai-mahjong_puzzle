@@ -1,4 +1,4 @@
-"""フェーズ4の画面遷移、通知キュー、結果集計。"""
+"""画面遷移、14役対応の通知キュー、結果集計。"""
 
 from __future__ import annotations
 
@@ -49,7 +49,16 @@ _YAKU_SHORT_NAMES = {
     Yaku.CHINITSU: "CHI",
     Yaku.HONROUTOU: "HRO",
     Yaku.YAKUHAI: "YAK",
+    Yaku.HONOR_PAIR: "HPR",
+    Yaku.TERMINAL_PAIR: "TPR",
+    Yaku.TWO_SUIT_SAME_SEQUENCE: "TSS",
+    Yaku.STEPPED_SEQUENCES: "STP",
+    Yaku.THREE_SUITS_USED: "TSU",
+    Yaku.FOUR_PAIRS: "4PR",
 }
+
+if set(_YAKU_SHORT_NAMES) != set(Yaku):
+    raise RuntimeError("和了通知の役略称がYaku定義と一致しません")
 
 
 def notices_from_turn(result: ResolvedTurn) -> tuple[Notice, ...]:

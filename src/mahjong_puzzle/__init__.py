@@ -1,9 +1,16 @@
-"""フェーズ1から4までのルール・盤面・ターン統合公開API。"""
+"""フェーズ1から5までのルール・盤面・ターン統合公開API。"""
 
 from mahjong_puzzle.board import Board, Coordinate
 from mahjong_puzzle.dora import count_dora, dora_from_indicator
 from mahjong_puzzle.game import GameState, PlacementResult
-from mahjong_puzzle.hand import HandDecomposition, Meld, MeldKind, enumerate_decompositions
+from mahjong_puzzle.hand import (
+    FourPairsDecomposition,
+    HandDecomposition,
+    Meld,
+    MeldKind,
+    enumerate_decompositions,
+    find_four_pairs_decomposition,
+)
 from mahjong_puzzle.integration import (
     GameSession,
     KanEvent,
@@ -33,6 +40,7 @@ __all__ = [
     "DiscardRecord",
     "GameState",
     "GameSession",
+    "FourPairsDecomposition",
     "HandDecomposition",
     "Honor",
     "KanCheckResult",
@@ -62,6 +70,7 @@ __all__ = [
     "dora_from_indicator",
     "enumerate_decompositions",
     "evaluate_hand",
+    "find_four_pairs_decomposition",
     "find_kan_candidates",
     "score_yaku_evaluations",
     "select_best_scored_evaluation",

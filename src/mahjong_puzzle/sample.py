@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mahjong_puzzle.dora import count_dora
+from mahjong_puzzle.hand import FourPairsDecomposition
 from mahjong_puzzle.scoring import select_best_scored_evaluation
 from mahjong_puzzle.state import LineState, TurnState
 from mahjong_puzzle.tiles import Suit, TileType
@@ -37,20 +38,26 @@ def main() -> None:
     registration = line_state.register_win(selected.evaluation.yaku)
     score = selected.score
 
-    melds = [
-        f"{meld.kind.value}: {', '.join(str(tile) for tile in meld.tiles)}"
-        for meld in selected.evaluation.decomposition.melds
-    ]
+    decomposition = selected.evaluation.decomposition
+    if isinstance(decomposition, FourPairsDecomposition):
+        decomposition_text = " / ".join(
+            f"pair: {pair} {pair}" for pair in decomposition.pairs
+        )
+    else:
+        melds = [
+            f"{meld.kind.value}: {', '.join(str(tile) for tile in meld.tiles)}"
+            for meld in decomposition.melds
+        ]
+        decomposition_text = (
+            f"{' / '.join(melds)} / pair: {decomposition.pair}"
+        )
     current_names = [
         YAKU_DISPLAY_NAMES[yaku]
         for yaku in sorted(selected.evaluation.yaku, key=str)
     ]
     new_names = [YAKU_DISPLAY_NAMES[yaku] for yaku in sorted(registration.new_yaku, key=str)]
     print(f"入力牌: {' '.join(str(tile) for tile in tiles)}")
-    print(
-        f"分解: {' / '.join(melds)} / pair: "
-        f"{selected.evaluation.decomposition.pair}"
-    )
+    print(f"分解: {decomposition_text}")
     print(f"成立役: {', '.join(current_names)}")
     print(f"新規役: {', '.join(new_names)}")
     print(f"ドラ枚数: {dora_count}")

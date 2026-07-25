@@ -21,13 +21,19 @@ def _default_yaku_points() -> Mapping[Yaku, int]:
             Yaku.CHINITSU: 500,
             Yaku.HONROUTOU: 400,
             Yaku.YAKUHAI: 200,
+            Yaku.HONOR_PAIR: 100,
+            Yaku.TERMINAL_PAIR: 100,
+            Yaku.TWO_SUIT_SAME_SEQUENCE: 200,
+            Yaku.STEPPED_SEQUENCES: 150,
+            Yaku.THREE_SUITS_USED: 100,
+            Yaku.FOUR_PAIRS: 400,
         }
     )
 
 
 @dataclass(frozen=True)
 class ScoringConfig:
-    """フェーズ1の仮点数。全項目をロジック外から差し替えられる。"""
+    """役の仮点数。全項目をロジック外から差し替えられる。"""
 
     yaku_points: Mapping[Yaku, int] = field(default_factory=_default_yaku_points)
     dora_point: int = 50

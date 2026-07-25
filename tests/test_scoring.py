@@ -127,3 +127,15 @@ def test_scoring_candidates_excludes_decomposition_with_only_acquired_yaku() -> 
     )
 
     assert selected is None
+
+
+def test_phase5_yaku_points_are_configured() -> None:
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.HONOR_PAIR] == 100
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.TERMINAL_PAIR] == 100
+    assert (
+        DEFAULT_SCORING_CONFIG.yaku_points[Yaku.TWO_SUIT_SAME_SEQUENCE]
+        == 200
+    )
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.STEPPED_SEQUENCES] == 150
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.THREE_SUITS_USED] == 100
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.FOUR_PAIRS] == 400

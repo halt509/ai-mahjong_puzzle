@@ -11,6 +11,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PACKAGE = PROJECT_ROOT / "src" / "mahjong_puzzle"
+FONT_ASSETS = PROJECT_ROOT / "assets" / "fonts"
 OUTPUT_DIR = PROJECT_ROOT / "web"
 WEB_APPS = (
     (
@@ -35,6 +36,7 @@ def _build_app(app_name: str, entry: Path, output: Path) -> None:
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "sample.py"),
         )
         shutil.copy2(entry, app_dir / entry.name)
+        shutil.copytree(FONT_ASSETS, app_dir / "assets" / "fonts")
 
         subprocess.run(
             [

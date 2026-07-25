@@ -5,6 +5,7 @@ from fractions import Fraction
 
 from mahjong_puzzle.board import BOARD_HEIGHT, BOARD_WIDTH, Board, Coordinate
 from mahjong_puzzle.game import BLOCK_COUNT, GameState
+from mahjong_puzzle.hand import FourPairsDecomposition
 from mahjong_puzzle.integration import GameSession
 from mahjong_puzzle.river import River
 from mahjong_puzzle.state import LineState, TurnState
@@ -291,7 +292,9 @@ def test_two_changed_rows_win_with_simultaneous_multiplier() -> None:
 def test_rewin_scores_only_new_yaku_and_updates_line_history() -> None:
     row = [s(1), s(2), s(3), s(1), s(2), s(3), s(5), s(5)]
     line_states = tuple(LineState() for _ in range(BOARD_HEIGHT))
-    line_states[0].acquired_yaku.update({Yaku.ALL_SEQUENCES, Yaku.CHINITSU})
+    line_states[0].acquired_yaku.update(
+        {Yaku.ALL_SEQUENCES, Yaku.CHINITSU, Yaku.FOUR_PAIRS}
+    )
     line_states[0].win_count = 1
     session = _build_session(
         row_specs={0: row},
@@ -318,6 +321,7 @@ def test_rewin_scores_only_new_yaku_and_updates_line_history() -> None:
     assert session.line_states[0].acquired_yaku == {
         Yaku.ALL_SEQUENCES,
         Yaku.CHINITSU,
+        Yaku.FOUR_PAIRS,
         Yaku.IIPEIKOU,
     }
     assert session.line_states[0].win_count == 2
@@ -385,3 +389,123 @@ def test_turn_without_win_or_kan_resets_combo() -> None:
     assert result.kans == ()
     assert result.wins == ()
     assert result.consecutive_win_turns == 0
+
+
+def test_four_pairs_wins_without_a_normal_decomposition() -> None:
+    row = (
+        [s(2)] * 2
+        + [s(5)] * 2
+        + [s(3, Suit.PINZU)] * 2
+        + [h(Honor.WHITE)] * 2
+    )
+    session = _build_session(
+        row_specs={0: row},
+        block_types=tuple(row[:4]),
+        block_kind=TetrominoKind.I,
+        rotation=0,
+        origin_x=0,
+        origin_y=0,
+        dora_types=(
+            s(9, Suit.SOUZU),
+            s(9, Suit.PINZU),
+            h(Honor.NORTH),
+            h(Honor.RED),
+        ),
+    )
+
+    result = session.place_active()
+
+    assert len(result.wins) == 1
+    win = result.wins[0]
+    assert isinstance(win.evaluation.decomposition, FourPairsDecomposition)
+    assert win.new_yaku == {Yaku.FOUR_PAIRS}
+    assert win.score.yaku_points == {Yaku.FOUR_PAIRS: 400}
+
+
+def test_new_kan_still_takes_priority_over_four_pairs_evaluation() -> None:
+    quad = s(2)
+    row = [quad] * 4 + [s(3, Suit.PINZU)] * 2 + [h(Honor.WHITE)] * 2
+    session = _build_session(
+        row_specs={0: row},
+        block_types=(quad,) * 4,
+        block_kind=TetrominoKind.I,
+        rotation=0,
+        origin_x=0,
+        origin_y=0,
+        dora_types=(
+            s(9, Suit.SOUZU),
+            s(9, Suit.PINZU),
+            h(Honor.NORTH),
+            h(Honor.RED),
+        ),
+    )
+
+    result = session.place_active()
+
+    assert [event.tile_type for event in result.kans] == [quad]
+    assert result.wins == ()
+
+
+def test_rewin_scores_only_a_new_phase5_yaku() -> None:
+    row = [s(1), s(2), s(3)] + [
+        s(4, Suit.PINZU),
+        s(5, Suit.PINZU),
+        s(6, Suit.PINZU),
+    ] + [h(Honor.EAST)] * 2
+    line_states = tuple(LineState() for _ in range(BOARD_HEIGHT))
+    line_states[0].acquired_yaku.add(Yaku.ALL_SEQUENCES)
+    line_states[0].win_count = 1
+    session = _build_session(
+        row_specs={0: row},
+        block_types=tuple(row[:4]),
+        block_kind=TetrominoKind.I,
+        rotation=0,
+        origin_x=0,
+        origin_y=0,
+        dora_types=(
+            s(9, Suit.SOUZU),
+            s(9, Suit.PINZU),
+            h(Honor.NORTH),
+            h(Honor.RED),
+        ),
+        line_states=line_states,
+    )
+
+    result = session.place_active()
+
+    assert len(result.wins) == 1
+    win = result.wins[0]
+    assert win.new_yaku == {Yaku.HONOR_PAIR}
+    assert win.score.yaku_points == {Yaku.HONOR_PAIR: 100}
+
+
+def test_acquired_phase5_yaku_alone_does_not_rewin() -> None:
+    row = [s(1), s(2), s(3)] + [
+        s(4, Suit.PINZU),
+        s(5, Suit.PINZU),
+        s(6, Suit.PINZU),
+    ] + [h(Honor.EAST)] * 2
+    line_states = tuple(LineState() for _ in range(BOARD_HEIGHT))
+    line_states[0].acquired_yaku.update(
+        {Yaku.ALL_SEQUENCES, Yaku.HONOR_PAIR}
+    )
+    line_states[0].win_count = 1
+    session = _build_session(
+        row_specs={0: row},
+        block_types=tuple(row[:4]),
+        block_kind=TetrominoKind.I,
+        rotation=0,
+        origin_x=0,
+        origin_y=0,
+        dora_types=(
+            s(9, Suit.SOUZU),
+            s(9, Suit.PINZU),
+            h(Honor.NORTH),
+            h(Honor.RED),
+        ),
+        line_states=line_states,
+    )
+
+    result = session.place_active()
+
+    assert result.wins == ()

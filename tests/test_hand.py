@@ -2,7 +2,12 @@ import random
 
 import pytest
 
-from mahjong_puzzle.hand import MeldKind, enumerate_decompositions
+from mahjong_puzzle.hand import (
+    FourPairsDecomposition,
+    MeldKind,
+    enumerate_decompositions,
+    find_four_pairs_decomposition,
+)
 from mahjong_puzzle.tiles import Honor, Suit, TileType
 
 
@@ -91,3 +96,17 @@ def test_all_multiple_decompositions_are_returned_without_reusing_tiles() -> Non
 def test_decomposition_requires_exactly_eight_tiles() -> None:
     with pytest.raises(ValueError, match="8枚"):
         enumerate_decompositions([s(1)] * 4 + [s(2)] * 3)
+
+
+def test_four_pairs_decomposition_requires_four_distinct_pair_types() -> None:
+    tiles = [s(1)] * 2 + [s(3)] * 2 + [s(5)] * 2 + [s(7)] * 2
+
+    result = find_four_pairs_decomposition(tiles)
+
+    assert result == FourPairsDecomposition((s(1), s(3), s(5), s(7)))
+
+
+def test_four_pairs_decomposition_rejects_a_quad() -> None:
+    tiles = [s(1)] * 4 + [s(3)] * 2 + [s(5)] * 2
+
+    assert find_four_pairs_decomposition(tiles) is None
