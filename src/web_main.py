@@ -1,6 +1,6 @@
 # title: Mahjong Tile Puzzle
 # desc: An 8x8 mahjong tile overwrite puzzle
-# version: 0.5.0
+# version: 0.5.1
 
 from mahjong_puzzle.app import MahjongPuzzleApp
 

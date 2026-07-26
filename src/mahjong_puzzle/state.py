@@ -28,6 +28,7 @@ class LineState:
     acquired_yaku: set[Yaku] = field(default_factory=set)
     completed_kans: set[TileType] = field(default_factory=set)
     win_count: int = 0
+    has_won: bool = False
 
     def __post_init__(self) -> None:
         if not all(isinstance(yaku, Yaku) for yaku in self.acquired_yaku):
@@ -36,21 +37,28 @@ class LineState:
             raise TypeError("カン履歴はTileTypeで指定してください")
         if not isinstance(self.win_count, int) or isinstance(self.win_count, bool) or self.win_count < 0:
             raise ValueError("和了回数は0以上の整数でなければなりません")
+        if not isinstance(self.has_won, bool):
+            raise TypeError("has_wonはboolでなければなりません")
+        if self.win_count > 0:
+            self.has_won = True
+        elif self.has_won:
+            raise ValueError("has_wonがTrueなら和了回数は1以上必要です")
         self.acquired_yaku = set(self.acquired_yaku)
         self.completed_kans = set(self.completed_kans)
 
     def register_win(self, current_yaku: Iterable[Yaku]) -> WinRegistration:
-        """未取得役がある場合だけ和了として全現在役を履歴へ追加する。"""
+        """初回基本和了か、未取得役がある再和了を履歴へ登録する。"""
 
         current = frozenset(current_yaku)
         if not all(isinstance(yaku, Yaku) for yaku in current):
             raise TypeError("現在役はYakuで指定してください")
         new_yaku = current - self.acquired_yaku
         previous_win_count = self.win_count
-        is_new_win = bool(new_yaku)
+        is_new_win = not self.has_won or bool(new_yaku)
         if is_new_win:
             self.acquired_yaku.update(current)
             self.win_count += 1
+            self.has_won = True
         return WinRegistration(
             current_yaku=current,
             new_yaku=frozenset(new_yaku),

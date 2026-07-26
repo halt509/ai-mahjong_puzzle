@@ -147,10 +147,14 @@ class GameSession:
             if row in kan_rows:
                 continue
             evaluations = evaluate_hand(self.game.board.row(row))
-            acquired = self.line_states[row].acquired_yaku
+            line_state = self.line_states[row]
+            acquired = line_state.acquired_yaku
             if any(
                 evaluation.is_winning
-                and bool(evaluation.yaku - acquired)
+                and (
+                    not line_state.has_won
+                    or bool(evaluation.yaku - acquired)
+                )
                 for evaluation in evaluations
             ):
                 winning_evaluations.append((row, evaluations))

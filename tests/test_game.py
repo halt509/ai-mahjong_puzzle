@@ -7,6 +7,7 @@ from mahjong_puzzle.game import (
     TOTAL_TURN_COUNT,
     GameState,
 )
+from mahjong_puzzle.initial_deal import InitialDealConfig
 from mahjong_puzzle.tetromino import TetrominoKind
 
 
@@ -19,6 +20,12 @@ def test_new_game_allocates_all_136_tiles_without_overlap() -> None:
     assert all(len(block.tiles) == 4 for block in game.blocks)
     assert len(game.tracked_tile_ids()) == 136
     assert game.visible_dora_indicators == (game.dora_indicator_tiles[0],)
+    assert game.initial_deal_debug is not None
+    assert game.initial_deal_debug.seed == 20260724
+    assert game.initial_deal_debug.attempt_count >= 1
+    assert len(game.initial_deal_debug.row_distances) == 8
+    assert game.initial_deal_debug.passed
+    assert not game.initial_deal_debug.used_fallback
 
 
 def test_same_seed_produces_same_board_tiles_and_block_kinds() -> None:
@@ -30,6 +37,65 @@ def test_same_seed_produces_same_board_tiles_and_block_kinds() -> None:
     ]
     assert [block.kind for block in first.blocks] == [
         block.kind for block in second.blocks
+    ]
+    assert [tile.tile_id for tile in first.dora_indicator_tiles] == [
+        tile.tile_id for tile in second.dora_indicator_tiles
+    ]
+    assert [
+        tile.tile_id for block in first.blocks for tile in block.tiles
+    ] == [
+        tile.tile_id for block in second.blocks for tile in block.tiles
+    ]
+    assert first.initial_deal_debug == second.initial_deal_debug
+
+
+def test_attempt_limit_uses_fallback_without_looping_forever() -> None:
+    config = InitialDealConfig(
+        max_close_distance=0,
+        required_close_rows=1,
+        max_playable_distance=3,
+        required_playable_rows=3,
+        max_attempts=2,
+    )
+
+    game = GameState.new(seed=11, initial_deal_config=config)
+
+    assert game.initial_deal_debug is not None
+    assert game.initial_deal_debug.attempt_count == 2
+    assert not game.initial_deal_debug.passed
+    assert game.initial_deal_debug.used_fallback
+    assert len(game.tracked_tile_ids()) == 136
+
+
+def test_fallback_keeps_best_candidate_instead_of_last_attempt() -> None:
+    one_attempt = InitialDealConfig(
+        max_close_distance=0,
+        required_close_rows=1,
+        max_playable_distance=3,
+        required_playable_rows=3,
+        max_attempts=1,
+    )
+    two_attempts = InitialDealConfig(
+        max_close_distance=0,
+        required_close_rows=1,
+        max_playable_distance=3,
+        required_playable_rows=3,
+        max_attempts=2,
+    )
+
+    first_only = GameState.new(seed=0, initial_deal_config=one_attempt)
+    with_worse_second = GameState.new(
+        seed=0,
+        initial_deal_config=two_attempts,
+    )
+
+    assert with_worse_second.initial_deal_debug is not None
+    assert with_worse_second.initial_deal_debug.attempt_count == 2
+    assert with_worse_second.initial_deal_debug.used_fallback
+    assert [
+        tile.tile_id for tile in with_worse_second.board.tiles
+    ] == [
+        tile.tile_id for tile in first_only.board.tiles
     ]
 
 

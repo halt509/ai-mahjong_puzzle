@@ -16,6 +16,18 @@ def test_first_win_registers_all_current_yaku() -> None:
     assert result.new_yaku == {Yaku.CHINITSU, Yaku.ALL_SEQUENCES}
     assert state.acquired_yaku == {Yaku.CHINITSU, Yaku.ALL_SEQUENCES}
     assert state.win_count == 1
+    assert state.has_won
+
+
+def test_first_roleless_basic_win_is_registered() -> None:
+    state = LineState()
+
+    result = state.register_win(set())
+
+    assert result.is_new_win
+    assert result.new_yaku == frozenset()
+    assert state.has_won
+    assert state.win_count == 1
 
 
 def test_only_acquired_yaku_does_not_register_again() -> None:
@@ -39,13 +51,14 @@ def test_new_yaku_registers_even_with_acquired_yaku_present() -> None:
     assert result.previous_win_count == 1
 
 
-def test_empty_yaku_cannot_register_as_a_win() -> None:
-    state = LineState()
+def test_roleless_basic_win_cannot_be_registered_twice() -> None:
+    state = LineState(has_won=True, win_count=1)
 
     result = state.register_win(set())
 
     assert not result.is_new_win
-    assert state.win_count == 0
+    assert state.has_won
+    assert state.win_count == 1
 
 
 def test_line_kan_history_is_updated_per_line() -> None:

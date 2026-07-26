@@ -179,6 +179,7 @@ def test_yaku_overlay_draws_japanese_details_and_tile_example(
     assert YAKU_DISPLAY_NAMES[entry.yaku] in texts
     assert entry.reading in texts
     assert entry.description in texts
+    assert "3＋3＋2で基本和了・役は追加得点" in texts
     assert tiles == list(entry.example_tiles)
 
 

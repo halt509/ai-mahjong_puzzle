@@ -87,15 +87,19 @@ def notices_from_turn(result: ResolvedTurn) -> tuple[Notice, ...]:
         new_names = "+".join(
             _YAKU_SHORT_NAMES[yaku]
             for yaku in sorted(event.new_yaku, key=lambda item: item.value)
-        )
+        ) or "NONE"
+        yaku_score = sum(event.score.yaku_points.values())
         notices.append(
             Notice(
                 kind=NoticeKind.WIN,
                 title=f"WIN! ROW {event.row + 1}",
                 lines=(
-                    f"NEW {new_names}",
-                    f"DORA {event.dora_count}",
-                    f"SCORE +{event.score.total_score}",
+                    f"BASE +{event.score.base_win_score}",
+                    f"YAKU {new_names} +{yaku_score}",
+                    (
+                        f"DORA {event.dora_count} +{event.score.dora_score}"
+                        f" / TOTAL +{event.score.total_score}"
+                    ),
                 ),
             )
         )

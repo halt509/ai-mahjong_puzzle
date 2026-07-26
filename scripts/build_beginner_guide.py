@@ -207,7 +207,7 @@ def draw_quick_start(
         ("1", "黄色い4牌を\n移動・回転"),
         ("2", "好きな位置へ\n上書き配置"),
         ("3", "横1列の8牌で\n3＋3＋2を作る"),
-        ("4", "役があれば和了！\n得点をゲット"),
+        ("4", "形ができれば和了！\n役は追加得点"),
     )
     step_width = 350
     for index, (number, label) in enumerate(steps):
@@ -365,7 +365,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
         fill=GOLD,
     )
     rules = (
-        "● 役がある「3＋3＋2」または四対子で和了",
+        "● 「3＋3＋2」または四対子で基本和了（50点）",
         "● 同じ行は、新しい役を作ればもう一度和了できる",
         "● 同じ牌4枚でカン。ドラ表示牌が増える",
         "● ドラは加点だけ。ドラだけでは和了できない",
@@ -419,7 +419,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
     )
     draw.text(
         (WIDTH - MARGIN, 3192),
-        "更新: 2026-07-25 / AI: GPT-5",
+        "更新: 2026-07-26 / AI: GPT-5",
         font=font(17),
         fill=MUTED,
         anchor="ra",

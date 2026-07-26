@@ -63,6 +63,7 @@ def main() -> None:
     print(f"ドラ枚数: {dora_count}")
     print(
         "得点内訳: "
+        f"基本={score.base_win_score}, "
         f"役={sum(score.yaku_points.values())}, "
         f"ドラ={score.dora_score}, "
         f"複合={score.combination_bonus}, "

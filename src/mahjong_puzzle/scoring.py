@@ -9,6 +9,8 @@ from typing import Iterable, Mapping
 
 from mahjong_puzzle.yaku import Yaku, YakuEvaluation
 
+BASE_WIN_SCORE = 50
+
 
 def _default_yaku_points() -> Mapping[Yaku, int]:
     return MappingProxyType(
@@ -36,6 +38,7 @@ class ScoringConfig:
     """役の仮点数。全項目をロジック外から差し替えられる。"""
 
     yaku_points: Mapping[Yaku, int] = field(default_factory=_default_yaku_points)
+    base_win_score: int = BASE_WIN_SCORE
     dora_point: int = 50
     combination_bonus_per_extra_yaku: int = 50
     repeat_win_bonus: int = 100
@@ -49,6 +52,7 @@ class ScoringConfig:
             raise ValueError(f"役点設定が不足しています: {names}")
         numeric_values = (
             *self.yaku_points.values(),
+            self.base_win_score,
             self.dora_point,
             self.combination_bonus_per_extra_yaku,
             self.repeat_win_bonus,
@@ -79,6 +83,7 @@ DEFAULT_SCORING_CONFIG = ScoringConfig()
 class ScoreBreakdown:
     """最終得点と、再現可能な計算内訳。"""
 
+    base_win_score: int
     yaku_points: Mapping[Yaku, int]
     dora_count: int
     dora_score: int
@@ -123,8 +128,6 @@ def calculate_score(
     new = frozenset(new_yaku)
     if not all(isinstance(yaku, Yaku) for yaku in current | new):
         raise TypeError("役はYakuで指定してください")
-    if not current or not new:
-        raise ValueError("和了得点には1つ以上の成立役と新規役が必要です")
     if not new <= current:
         raise ValueError("新規役は現在役の部分集合でなければなりません")
 
@@ -136,6 +139,8 @@ def calculate_score(
         raise ValueError("和了ターンの連続和了数は1以上でなければなりません")
     if simultaneous_line_count < 1:
         raise ValueError("同時和了行数は1以上でなければなりません")
+    if previous_line_wins > 0 and not new:
+        raise ValueError("再和了には1つ以上の新規役が必要です")
 
     yaku_points = MappingProxyType({yaku: config.yaku_points[yaku] for yaku in new})
     dora_score = dora_count * config.dora_point
@@ -143,7 +148,13 @@ def calculate_score(
         max(0, len(current) - 1) * config.combination_bonus_per_extra_yaku
     )
     line_repeat_bonus = previous_line_wins * config.repeat_win_bonus
-    subtotal = sum(yaku_points.values()) + dora_score + combination_bonus + line_repeat_bonus
+    subtotal = (
+        config.base_win_score
+        + sum(yaku_points.values())
+        + dora_score
+        + combination_bonus
+        + line_repeat_bonus
+    )
     streak_multiplier = 1 + (
         max(0, consecutive_win_turns - 1) * config.streak_multiplier_step
     )
@@ -153,6 +164,7 @@ def calculate_score(
     total = Fraction(subtotal) * streak_multiplier * simultaneous_multiplier
 
     return ScoreBreakdown(
+        base_win_score=config.base_win_score,
         yaku_points=yaku_points,
         dora_count=dora_count,
         dora_score=dora_score,
@@ -175,21 +187,19 @@ def score_yaku_evaluations(
     simultaneous_line_count: int,
     config: ScoringConfig = DEFAULT_SCORING_CONFIG,
 ) -> tuple[ScoredYakuEvaluation, ...]:
-    """未取得役がある分解候補をすべて採点する。
-
-    役なし候補と、現在役がすべて取得済みの候補は和了にならないため除外する。
-    """
+    """初回基本和了または未取得役がある再和了候補をすべて採点する。"""
 
     acquired = frozenset(acquired_yaku)
     if not all(isinstance(yaku, Yaku) for yaku in acquired):
         raise TypeError("取得済み役はYakuで指定してください")
 
     results: list[ScoredYakuEvaluation] = []
+    is_first_win = previous_line_wins == 0
     for evaluation in evaluations:
         if not isinstance(evaluation, YakuEvaluation):
             raise TypeError("候補はYakuEvaluationで指定してください")
         new_yaku = evaluation.yaku - acquired
-        if not evaluation.is_winning or not new_yaku:
+        if not evaluation.is_winning or (not is_first_win and not new_yaku):
             continue
         score = calculate_score(
             current_yaku=evaluation.yaku,

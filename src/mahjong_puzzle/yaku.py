@@ -72,9 +72,9 @@ class YakuEvaluation:
 
     @property
     def is_winning(self) -> bool:
-        """基本形に加え1役以上ある場合だけ真になる。"""
+        """有効な通常形または四対子の候補なので常に真を返す。"""
 
-        return bool(self.yaku)
+        return True
 
 
 def _validate_decomposition_matches(

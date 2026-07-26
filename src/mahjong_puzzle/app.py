@@ -962,14 +962,14 @@ class MahjongPuzzleApp:
         }
         page_label = f"{self._yaku_page + 1}/{len(YAKU_GUIDE_ENTRIES)}"
         if self.layout is LayoutMode.PORTRAIT:
-            name_y, reading_y, description_y = 36, 53, 78
-            example_label_y, example_y = 101, 116
-            acquired_y, navigation_y = 145, 235
+            name_y, reading_y, description_y = 49, 64, 88
+            example_label_y, example_y = 109, 124
+            acquired_y, navigation_y = 153, 235
             text_x, points_x = 13, 128
         else:
-            name_y, reading_y, description_y = 33, 49, 66
-            example_label_y, example_y = 82, 96
-            acquired_y, navigation_y = 122, 153
+            name_y, reading_y, description_y = 39, 54, 72
+            example_label_y, example_y = 87, 101
+            acquired_y, navigation_y = 127, 153
             text_x, points_x = 18, 198
         pyxel.text(
             self.screen_width - len(page_label) * 4 - 12,
@@ -977,6 +977,29 @@ class MahjongPuzzleApp:
             page_label,
             COLOR_GOLD,
         )
+        if self.layout is LayoutMode.PORTRAIT:
+            pyxel.text(
+                text_x,
+                24,
+                "3＋3＋2で基本和了",
+                COLOR_IVORY,
+                self._japanese_font,
+            )
+            pyxel.text(
+                text_x,
+                35,
+                "役があれば追加得点",
+                COLOR_MUTED,
+                self._japanese_font,
+            )
+        else:
+            pyxel.text(
+                text_x,
+                24,
+                "3＋3＋2で基本和了・役は追加得点",
+                COLOR_IVORY,
+                self._japanese_font,
+            )
         pyxel.text(
             text_x,
             name_y,

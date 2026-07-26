@@ -10,6 +10,13 @@ from mahjong_puzzle.board import (
     BOARD_WIDTH,
     Board,
 )
+from mahjong_puzzle.initial_deal import (
+    DEFAULT_INITIAL_DEAL_CONFIG,
+    InitialDealConfig,
+    InitialDealDebug,
+    InitialDealEvaluation,
+    evaluate_initial_deal,
+)
 from mahjong_puzzle.river import DiscardRecord, River
 from mahjong_puzzle.tetromino import (
     PositionedCell,
@@ -26,6 +33,14 @@ BLOCK_COUNT = BLOCK_TILE_COUNT // 4
 TOTAL_TURN_COUNT = BLOCK_COUNT
 NEXT_BLOCK_DISPLAY_COUNT = 3
 TOTAL_TILE_COUNT = BOARD_TILE_COUNT + DORA_RESERVE_COUNT + BLOCK_TILE_COUNT
+
+
+@dataclass(frozen=True)
+class _InitialDealCandidate:
+    board: Board
+    dora_indicator_tiles: tuple[Tile, ...]
+    blocks: tuple[Tetromino, ...]
+    evaluation: InitialDealEvaluation
 
 
 @dataclass(frozen=True)
@@ -56,6 +71,7 @@ class GameState:
     active_rotation: int = 0
     next_display_count: int = NEXT_BLOCK_DISPLAY_COUNT
     revealed_dora_count: int = 1
+    initial_deal_debug: InitialDealDebug | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.board, Board):
@@ -73,6 +89,11 @@ class GameState:
             raise ValueError("配置ブロックのblock_idが重複しています")
         if not isinstance(self.river, River):
             raise TypeError("riverにはRiverが必要です")
+        if (
+            self.initial_deal_debug is not None
+            and not isinstance(self.initial_deal_debug, InitialDealDebug)
+        ):
+            raise TypeError("initial_deal_debugにはInitialDealDebugが必要です")
         for name, value in (
             ("turn", self.turn),
             ("active_index", self.active_index),
@@ -102,26 +123,60 @@ class GameState:
                 raise ValueError("現在ブロックの位置が盤面外です")
 
     @classmethod
-    def new(cls, *, seed: int | None = None) -> GameState:
-        """136枚を64＋4＋68へ配分し、再現可能な新規ゲームを作る。"""
+    def new(
+        cls,
+        *,
+        seed: int | None = None,
+        initial_deal_config: InitialDealConfig = DEFAULT_INITIAL_DEAL_CONFIG,
+    ) -> GameState:
+        """合格する初期状態を探し、136枚を64＋4＋68へ配分する。"""
 
         if seed is not None and (
             not isinstance(seed, int) or isinstance(seed, bool)
         ):
             raise ValueError("seedは整数またはNoneでなければなりません")
-        rng = random.Random(seed)
-        tiles = list(create_full_tile_set())
-        rng.shuffle(tiles)
-        board_end = BOARD_TILE_COUNT
-        dora_end = board_end + DORA_RESERVE_COUNT
-        board = Board.from_tiles(tiles[:board_end])
-        dora_tiles = tuple(tiles[board_end:dora_end])
-        blocks = create_tetrominoes(tiles[dora_end:], rng)
+        if not isinstance(initial_deal_config, InitialDealConfig):
+            raise TypeError("initial_deal_configにはInitialDealConfigが必要です")
+        effective_seed = (
+            seed
+            if seed is not None
+            else random.SystemRandom().randrange(0, 2**63)
+        )
+        rng = random.Random(effective_seed)
+        selected: _InitialDealCandidate | None = None
+        best: _InitialDealCandidate | None = None
+        attempt_count = 0
+        for attempt_count in range(1, initial_deal_config.max_attempts + 1):
+            candidate = _create_initial_deal_candidate(
+                rng,
+                initial_deal_config,
+            )
+            if (
+                best is None
+                or candidate.evaluation.quality_key
+                > best.evaluation.quality_key
+            ):
+                best = candidate
+            if candidate.evaluation.passed:
+                selected = candidate
+                break
+        used_fallback = selected is None
+        if selected is None:
+            if best is None:
+                raise RuntimeError("初期配牌候補を生成できませんでした")
+            selected = best
         game = cls(
-            board=board,
-            dora_indicator_tiles=dora_tiles,
-            blocks=blocks,
+            board=selected.board,
+            dora_indicator_tiles=selected.dora_indicator_tiles,
+            blocks=selected.blocks,
             river=River(),
+            initial_deal_debug=InitialDealDebug(
+                seed=effective_seed,
+                attempt_count=attempt_count,
+                row_distances=selected.evaluation.row_distances,
+                passed=selected.evaluation.passed,
+                used_fallback=used_fallback,
+            ),
         )
         game._reset_active_position()
         game.validate_tile_conservation()
@@ -294,3 +349,24 @@ class GameState:
 
         self.validate_tile_conservation()
         return frozenset(tile.tile_id for tile in self._tracked_tiles())
+
+
+def _create_initial_deal_candidate(
+    rng: random.Random,
+    config: InitialDealConfig,
+) -> _InitialDealCandidate:
+    """牌山全体を1回生成し、盤面と最初の3ブロックを評価する。"""
+
+    tiles = list(create_full_tile_set())
+    rng.shuffle(tiles)
+    board_end = BOARD_TILE_COUNT
+    dora_end = board_end + DORA_RESERVE_COUNT
+    board = Board.from_tiles(tiles[:board_end])
+    dora_tiles = tuple(tiles[board_end:dora_end])
+    blocks = create_tetrominoes(tiles[dora_end:], rng)
+    return _InitialDealCandidate(
+        board=board,
+        dora_indicator_tiles=dora_tiles,
+        blocks=blocks,
+        evaluation=evaluate_initial_deal(board, blocks, config),
+    )

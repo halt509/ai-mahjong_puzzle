@@ -90,7 +90,7 @@ def test_each_yaku_has_a_non_matching_case(tiles: list[TileType], absent: Yaku) 
     assert absent not in evaluations[0].yaku
 
 
-def test_basic_shape_without_any_yaku_is_not_a_winning_evaluation() -> None:
+def test_basic_shape_without_any_yaku_is_a_winning_evaluation() -> None:
     tiles = [
         s(1),
         s(2),
@@ -104,7 +104,7 @@ def test_basic_shape_without_any_yaku_is_not_a_winning_evaluation() -> None:
     evaluation = evaluate_hand(tiles)[0]
 
     assert evaluation.yaku == frozenset()
-    assert not evaluation.is_winning
+    assert evaluation.is_winning
 
 
 def test_multiple_decompositions_are_evaluated_separately() -> None:
