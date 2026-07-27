@@ -1,4 +1,4 @@
-"""フェーズ5の役一覧を含む画面・通知・音のPyxelアプリ。"""
+"""フェーズ6の初心者説明を含む画面・入力・音のPyxelアプリ。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,10 @@ from mahjong_puzzle.integration import GameSession
 from mahjong_puzzle.persistence import (
     HighScoreBackend,
     HighScoreError,
+    TutorialProgressBackend,
+    TutorialProgressError,
     create_default_high_score_store,
+    create_default_tutorial_progress_store,
 )
 from mahjong_puzzle.scoring import DEFAULT_SCORING_CONFIG
 from mahjong_puzzle.sprites import (
@@ -26,6 +29,7 @@ from mahjong_puzzle.sprites import (
 )
 from mahjong_puzzle.tetromino import PositionedCell, Tetromino
 from mahjong_puzzle.tiles import Honor, Suit, Tile, TileType
+from mahjong_puzzle.tutorial import TUTORIAL_PAGES, TutorialState
 from mahjong_puzzle.ui import GameSummary, NoticeKind, ScreenMode, UiState
 from mahjong_puzzle.yaku import YAKU_DISPLAY_NAMES, Yaku
 from mahjong_puzzle.yaku_catalog import YAKU_GUIDE_ENTRIES
@@ -45,12 +49,13 @@ PORTRAIT_BOARD_ORIGIN_Y = 18
 CELL_SIZE = 16
 SIDEBAR_X = 144
 SIDEBAR_WIDTH = 108
-SIDEBAR_HEIGHT = 136
+SIDEBAR_Y = BOARD_ORIGIN_Y - 2
+SIDEBAR_HEIGHT = BOARD_HEIGHT * CELL_SIZE + 4
 DORA_TILE_X = SIDEBAR_X + 22
-DORA_TILE_Y = BOARD_ORIGIN_Y + 47
-NEXT_LABEL_OFFSET_Y = 88
-NEXT_START_OFFSET_Y = 96
-NEXT_ITEM_SPACING = 12
+DORA_TILE_Y = BOARD_ORIGIN_Y + 40
+NEXT_LABEL_OFFSET_Y = 61
+NEXT_START_OFFSET_Y = 72
+NEXT_ITEM_SPACING = 19
 NEXT_CELL_STEP = 3
 NEXT_CELL_SIZE = 3
 
@@ -121,6 +126,14 @@ _HONOR_LABELS = {
     Honor.RED: "C",
 }
 JAPANESE_FONT_RELATIVE_PATH = Path("assets/fonts/umplus_j10r.bdf")
+TUTORIAL_SCREENSHOT_RELATIVE_PATH = Path(
+    "assets/guides/tutorial-gameplay.png"
+)
+TUTORIAL_IMAGE_BANK = 1
+GUIDE_CHARACTER_RELATIVE_PATH = Path(
+    "assets/sprites/peacock-guide.png"
+)
+GUIDE_CHARACTER_IMAGE_BANK = 2
 
 
 class ControlAction(str, Enum):
@@ -137,6 +150,7 @@ class ControlAction(str, Enum):
     TOGGLE_YAKU = "toggle_yaku"
     START_GAME = "start_game"
     RESTART_GAME = "restart_game"
+    HELP = "help"
     CANCEL = "cancel"
     QUIT = "quit"
 
@@ -184,17 +198,19 @@ CONTROL_BINDINGS: dict[ControlAction, tuple[int, ...]] = {
     ),
     ControlAction.TOGGLE_YAKU: (
         pyxel.KEY_Y,
-        pyxel.GAMEPAD1_BUTTON_Y,
+        pyxel.GAMEPAD1_BUTTON_START,
     ),
     ControlAction.START_GAME: (
         pyxel.KEY_SPACE,
         pyxel.KEY_RETURN,
         pyxel.GAMEPAD1_BUTTON_A,
-        pyxel.GAMEPAD1_BUTTON_START,
     ),
     ControlAction.RESTART_GAME: (
         pyxel.KEY_R,
         pyxel.GAMEPAD1_BUTTON_A,
+    ),
+    ControlAction.HELP: (
+        pyxel.KEY_H,
         pyxel.GAMEPAD1_BUTTON_START,
     ),
     ControlAction.CANCEL: (
@@ -241,13 +257,14 @@ def tile_color(kind: TileType) -> int:
 
 
 class MahjongPuzzleApp:
-    """ゲーム進行とフェーズ4 UIを接続するPyxelアダプター。"""
+    """ゲーム進行とフェーズ6 UIを接続するPyxelアダプター。"""
 
     def __init__(
         self,
         *,
         seed: int | None = None,
         high_score_store: HighScoreBackend | None = None,
+        tutorial_progress_store: TutorialProgressBackend | None = None,
         layout: LayoutMode = LayoutMode.LANDSCAPE,
     ) -> None:
         if not isinstance(layout, LayoutMode):
@@ -256,6 +273,7 @@ class MahjongPuzzleApp:
         self.layout = layout
         self._japanese_font: pyxel.Font | None = None
         self._yaku_page = 0
+        self.tutorial = TutorialState()
         self.high_score_store = (
             high_score_store
             if high_score_store is not None
@@ -267,6 +285,17 @@ class MahjongPuzzleApp:
         except HighScoreError as error:
             self.high_score = 0
             self.persistence_error = str(error)
+        self.tutorial_progress_store = (
+            tutorial_progress_store
+            if tutorial_progress_store is not None
+            else create_default_tutorial_progress_store()
+        )
+        self.tutorial_persistence_error: str | None = None
+        try:
+            self._tutorial_seen = self.tutorial_progress_store.load()
+        except TutorialProgressError as error:
+            self._tutorial_seen = False
+            self.tutorial_persistence_error = str(error)
         self.ui = UiState()
         self._new_session()
 
@@ -305,11 +334,28 @@ class MahjongPuzzleApp:
     def _centered_text_x(self, text: str) -> int:
         return (self.screen_width - len(text) * 4) // 2
 
+    def _japanese_text_width(self, text: str) -> int:
+        if self._japanese_font is None:
+            raise RuntimeError("日本語フォントが初期化されていません")
+        text_width = getattr(self._japanese_font, "text_width", None)
+        if callable(text_width):
+            return int(text_width(text))
+        return len(text) * 10
+
+    def _centered_japanese_x(self, text: str) -> int:
+        return (self.screen_width - self._japanese_text_width(text)) // 2
+
     @property
     def yaku_page(self) -> int:
         """役一覧で現在表示している0始まりページを返す。"""
 
         return self._yaku_page
+
+    @property
+    def tutorial_page(self) -> int:
+        """説明で現在表示している0始まりページを返す。"""
+
+        return self.tutorial.page_index
 
     def _new_session(self) -> None:
         self.session = GameSession.new(seed=self.seed)
@@ -328,23 +374,52 @@ class MahjongPuzzleApp:
         self._japanese_font = pyxel.Font(self._resolve_japanese_font_path())
         self._configure_palette()
         build_placeholder_tile_atlas(pyxel.images[TILE_IMAGE_BANK])
+        pyxel.images[TUTORIAL_IMAGE_BANK].load(
+            0,
+            0,
+            self._resolve_runtime_asset_path(
+                TUTORIAL_SCREENSHOT_RELATIVE_PATH
+            ),
+        )
+        pyxel.images[GUIDE_CHARACTER_IMAGE_BANK].load(
+            0,
+            0,
+            self._resolve_runtime_asset_path(
+                GUIDE_CHARACTER_RELATIVE_PATH
+            ),
+        )
         self._configure_sounds()
+        self._show_initial_tutorial_if_needed()
         pyxel.run(self.update, self.draw)
+
+    def _show_initial_tutorial_if_needed(self) -> None:
+        """未読ならPyxelループ開始前に初回説明を開く。"""
+
+        if self._tutorial_seen:
+            return
+        self.tutorial = TutorialState(initial=True)
+        self.ui.open_help()
 
     @staticmethod
     def _resolve_japanese_font_path() -> str:
+        return MahjongPuzzleApp._resolve_runtime_asset_path(
+            JAPANESE_FONT_RELATIVE_PATH
+        )
+
+    @staticmethod
+    def _resolve_runtime_asset_path(relative_path: Path) -> str:
         source_root = Path(__file__).resolve().parents[2]
         packaged_root = Path(__file__).resolve().parents[1]
         candidates = (
-            source_root / JAPANESE_FONT_RELATIVE_PATH,
-            packaged_root / JAPANESE_FONT_RELATIVE_PATH,
-            Path.cwd() / JAPANESE_FONT_RELATIVE_PATH,
+            source_root / relative_path,
+            packaged_root / relative_path,
+            Path.cwd() / relative_path,
         )
         for candidate in candidates:
             if candidate.is_file():
                 return str(candidate)
         raise FileNotFoundError(
-            f"日本語フォントが見つかりません: {JAPANESE_FONT_RELATIVE_PATH}"
+            f"実行用アセットが見つかりません: {relative_path}"
         )
 
     @staticmethod
@@ -380,10 +455,26 @@ class MahjongPuzzleApp:
             return
 
         if self.ui.screen is ScreenMode.TITLE:
-            if self._action_pressed(ControlAction.START_GAME):
+            if self._action_pressed(ControlAction.HELP):
+                self._open_help()
+            elif self._action_pressed(ControlAction.START_GAME):
                 self.ui.start_game()
             elif self._action_pressed(ControlAction.QUIT):
                 pyxel.quit()
+            return
+
+        if self.ui.screen is ScreenMode.HELP:
+            if self._action_pressed(ControlAction.MOVE_LEFT):
+                self.tutorial.previous_page()
+            elif self._action_pressed(ControlAction.MOVE_RIGHT):
+                self.tutorial.next_page()
+            elif self._action_pressed(ControlAction.PLACE):
+                if not self.tutorial.next_page():
+                    self._close_help()
+            elif self._action_pressed(
+                ControlAction.CANCEL
+            ) or self._action_pressed(ControlAction.HELP):
+                self._close_help()
             return
 
         if self.ui.screen is ScreenMode.RIVER:
@@ -409,7 +500,9 @@ class MahjongPuzzleApp:
             return
 
         if self.ui.screen is ScreenMode.RESULT:
-            if self._action_pressed(ControlAction.RESTART_GAME):
+            if self._action_pressed(ControlAction.HELP):
+                self._open_help()
+            elif self._action_pressed(ControlAction.RESTART_GAME):
                 self._new_session()
                 self.ui = UiState(screen=ScreenMode.GAME)
             elif self._action_pressed(ControlAction.QUIT):
@@ -425,6 +518,9 @@ class MahjongPuzzleApp:
         if self._action_pressed(ControlAction.TOGGLE_YAKU):
             self._yaku_page = 0
             self.ui.open_overlay(ScreenMode.YAKU)
+            return
+        if self._pressed(pyxel.KEY_H):
+            self._open_help()
             return
         if self._action_pressed(ControlAction.MOVE_LEFT):
             self.game.move_active(-1, 0)
@@ -449,6 +545,22 @@ class MahjongPuzzleApp:
                 pyxel.play(2, 2)
             self._record_result_if_needed()
 
+    def _open_help(self) -> None:
+        if self.ui.open_help():
+            self.tutorial = TutorialState()
+
+    def _close_help(self) -> None:
+        was_initial = self.tutorial.initial
+        self.ui.close_help()
+        if not was_initial:
+            return
+        self._tutorial_seen = True
+        try:
+            self.tutorial_progress_store.mark_seen()
+            self.tutorial_persistence_error = None
+        except TutorialProgressError as error:
+            self.tutorial_persistence_error = str(error)
+
     def _record_result_if_needed(self) -> None:
         if self.ui.screen is not ScreenMode.RESULT or self._result_recorded:
             return
@@ -469,6 +581,9 @@ class MahjongPuzzleApp:
         if self.ui.screen is ScreenMode.RESULT:
             self._draw_result()
             return
+        if self.ui.screen is ScreenMode.HELP:
+            self._draw_help()
+            return
 
         self._draw_game()
         if self.ui.screen is ScreenMode.RIVER:
@@ -477,6 +592,185 @@ class MahjongPuzzleApp:
             self._draw_yaku_overlay()
         if self.ui.current_notice is not None:
             self._draw_notice()
+
+    def _draw_help(self) -> None:
+        """共通内容を横・縦それぞれの説明画面へ収めて描く。"""
+
+        if self._japanese_font is None:
+            raise RuntimeError("日本語フォントが初期化されていません")
+        page = self.tutorial.page
+        pyxel.cls(COLOR_BACKGROUND)
+        if self.layout is LayoutMode.PORTRAIT:
+            panel = (5, 8, 166, 240)
+            bird_x, bird_y = 14, 28
+            bubble = (10, 68, 156, 126)
+            title_y, line_y, line_step = 78, 99, 18
+            max_chars = 14
+            footer_y = 218
+        else:
+            panel = (5, 8, 246, 160)
+            bird_x, bird_y = 10, 34
+            bubble = (54, 25, 188, 116)
+            title_y, line_y, line_step = 35, 55, 17
+            max_chars = 18
+            footer_y = 153
+        x, y, width, height = panel
+        pyxel.rect(x, y, width, height, COLOR_PANEL)
+        pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
+        pyxel.rectb(x + 3, y + 3, width - 6, height - 6, COLOR_MAHOGANY)
+        pyxel.text(
+            12,
+            16,
+            "遊び方",
+            COLOR_GOLD,
+            self._japanese_font,
+        )
+        page_label = f"{self.tutorial_page + 1}/{len(TUTORIAL_PAGES)}"
+        pyxel.text(
+            self.screen_width - len(page_label) * 4 - 12,
+            18,
+            page_label,
+            COLOR_GOLD,
+        )
+        self._draw_guide_bird(bird_x, bird_y)
+        bubble_x, bubble_y, bubble_width, bubble_height = bubble
+        pyxel.rect(
+            bubble_x,
+            bubble_y,
+            bubble_width,
+            bubble_height,
+            COLOR_IVORY,
+        )
+        pyxel.rectb(
+            bubble_x,
+            bubble_y,
+            bubble_width,
+            bubble_height,
+            COLOR_WOOD_EDGE,
+        )
+        if self.layout is LayoutMode.LANDSCAPE:
+            pyxel.tri(
+                bubble_x,
+                bubble_y + 24,
+                bubble_x - 9,
+                bubble_y + 16,
+                bubble_x,
+                bubble_y + 10,
+                COLOR_IVORY,
+            )
+        pyxel.text(
+            bubble_x + 8,
+            title_y,
+            page.title,
+            COLOR_VERMILION,
+            self._japanese_font,
+        )
+        if self.tutorial_page == 0:
+            first_line_y = (
+                line_y
+                if self.layout is LayoutMode.PORTRAIT
+                else line_y - 5
+            )
+            pyxel.text(
+                bubble_x + 8,
+                first_line_y,
+                page.lines[0],
+                COLOR_INK,
+                self._japanese_font,
+            )
+            screenshot_x = (
+                bubble_x + (bubble_width - 128) // 2
+            )
+            screenshot_y = first_line_y + 14
+            pyxel.blt(
+                screenshot_x,
+                screenshot_y,
+                TUTORIAL_IMAGE_BANK,
+                8,
+                24,
+                128,
+                64,
+            )
+            content_line_count = 0
+        else:
+            wrapped_lines = tuple(
+                part
+                for line in page.lines
+                for part in self._wrap_help_line(line, max_chars=max_chars)
+            )
+            for index, line in enumerate(wrapped_lines):
+                pyxel.text(
+                    bubble_x + 8,
+                    line_y + index * line_step,
+                    line,
+                    COLOR_INK,
+                    self._japanese_font,
+                )
+            content_line_count = len(wrapped_lines)
+        page_controls = {
+            0: (
+                "X・B:回転  A:確定"
+                if self.layout is LayoutMode.PORTRAIT
+                else "Z・X:回転  SPACE・A:確定"
+            ),
+            2: (
+                "START:役一覧"
+                if self.layout is LayoutMode.PORTRAIT
+                else "Y:役一覧"
+            ),
+            3: (
+                "SELECT・BACK:川"
+                if self.layout is LayoutMode.PORTRAIT
+                else "TAB:川"
+            ),
+        }
+        controls = page_controls.get(self.tutorial_page)
+        if controls is not None:
+            if self.tutorial_page == 0:
+                controls_y = screenshot_y + 66
+            else:
+                controls_y = line_y + content_line_count * line_step
+            pyxel.text(
+                bubble_x + 8,
+                controls_y,
+                controls,
+                COLOR_INDIGO,
+                self._japanese_font,
+            )
+        footer = "←→  B/ESC:閉じる"
+        pyxel.text(
+            self._centered_japanese_x(footer),
+            footer_y if self.layout is LayoutMode.LANDSCAPE else 231,
+            footer,
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+
+    @staticmethod
+    def _wrap_help_line(text: str, *, max_chars: int) -> tuple[str, ...]:
+        if not isinstance(text, str) or not text:
+            raise ValueError("textには空でない文字列が必要です")
+        if not isinstance(max_chars, int) or max_chars <= 0:
+            raise ValueError("max_charsには正の整数が必要です")
+        return tuple(
+            text[index : index + max_chars]
+            for index in range(0, len(text), max_chars)
+        )
+
+    @staticmethod
+    def _draw_guide_bird(x: int, y: int) -> None:
+        """絵文字を参考にしたオリジナルのくじゃく仮スプライト。"""
+
+        pyxel.blt(
+            x,
+            y,
+            GUIDE_CHARACTER_IMAGE_BANK,
+            0,
+            0,
+            40,
+            40,
+            COLOR_PINK,
+        )
 
     def _draw_title(self) -> None:
         if self.layout is LayoutMode.PORTRAIT:
@@ -506,37 +800,60 @@ class MahjongPuzzleApp:
         sample_x = (SCREEN_WIDTH - sample_width) // 2
         for index, tile_type in enumerate(sample_types):
             self._blt_tile(sample_x + index * 18, 56, tile_type)
-        tagline = "OVERWRITE. BUILD. WIN."
-        pyxel.text(centered_text_x(tagline), 86, tagline, COLOR_IVORY)
-        start_text = "SPACE / ENTER / A START"
+        tagline = "牌を上書きして役を作ろう"
         pyxel.text(
-            centered_text_x(start_text),
-            104,
+            self._centered_japanese_x(tagline),
+            84,
+            tagline,
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        start_text = "SPACE・ENTER・Aで開始"
+        pyxel.text(
+            self._centered_japanese_x(start_text),
+            101,
             start_text,
             COLOR_BRIGHT_IVORY,
+            self._japanese_font,
         )
-        high_score_text = f"HIGH SCORE {self.high_score}"
+        help_text = "H・STARTで遊び方"
         pyxel.text(
-            centered_text_x(high_score_text),
-            121,
+            self._centered_japanese_x(help_text),
+            113,
+            help_text,
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+        high_score_text = f"最高得点 {self.high_score}"
+        pyxel.text(
+            self._centered_japanese_x(high_score_text),
+            125,
             high_score_text,
             COLOR_GOLD,
+            self._japanese_font,
         )
-        if self.persistence_error is not None:
-            error_text = "HIGH SCORE SAVE UNAVAILABLE"
+        save_error = (
+            self.persistence_error is not None
+            or self.tutorial_persistence_error is not None
+        )
+        if save_error:
+            error_text = "保存領域を使えません"
             pyxel.text(
-                centered_text_x(error_text),
-                129,
+                self._centered_japanese_x(error_text),
+                137,
                 error_text,
                 COLOR_VERMILION,
+                self._japanese_font,
             )
-        quit_text = "ESC: QUIT"
-        pyxel.text(
-            centered_text_x(quit_text),
-            TITLE_QUIT_Y,
-            quit_text,
-            COLOR_MUTED,
-        )
+        else:
+            quit_text = "ESC: 終了"
+            pyxel.text(
+                self._centered_japanese_x(quit_text),
+                TITLE_QUIT_Y,
+                quit_text,
+                COLOR_MUTED,
+                self._japanese_font,
+            )
 
     def _draw_portrait_title(self) -> None:
         pyxel.cls(COLOR_BACKGROUND)
@@ -557,35 +874,56 @@ class MahjongPuzzleApp:
         sample_x = (self.screen_width - sample_width) // 2
         for index, tile_type in enumerate(sample_types):
             self._blt_tile(sample_x + index * 18, 75, tile_type)
-        tagline = "OVERWRITE. BUILD. WIN."
-        pyxel.text(self._centered_text_x(tagline), 112, tagline, COLOR_IVORY)
-        start_text = "A / START TO PLAY"
+        tagline = "牌を上書きして役を作ろう"
         pyxel.text(
-            self._centered_text_x(start_text),
-            145,
+            self._centered_japanese_x(tagline),
+            111,
+            tagline,
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        start_text = "Aでゲーム開始"
+        pyxel.text(
+            self._centered_japanese_x(start_text),
+            142,
             start_text,
             COLOR_BRIGHT_IVORY,
+            self._japanese_font,
         )
-        high_score_text = f"HIGH SCORE {self.high_score}"
+        help_text = "STARTで遊び方"
         pyxel.text(
-            self._centered_text_x(high_score_text),
-            174,
+            self._centered_japanese_x(help_text),
+            160,
+            help_text,
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+        high_score_text = f"最高得点 {self.high_score}"
+        pyxel.text(
+            self._centered_japanese_x(high_score_text),
+            181,
             high_score_text,
             COLOR_GOLD,
+            self._japanese_font,
         )
-        if self.persistence_error is not None:
-            error_text = "HIGH SCORE SAVE UNAVAILABLE"
+        if (
+            self.persistence_error is not None
+            or self.tutorial_persistence_error is not None
+        ):
+            error_text = "保存領域を使えません"
             pyxel.text(
-                self._centered_text_x(error_text),
-                191,
+                self._centered_japanese_x(error_text),
+                199,
                 error_text,
                 COLOR_VERMILION,
+                self._japanese_font,
             )
         pyxel.text(
-            self._centered_text_x("VIRTUAL PAD BELOW"),
+            self._centered_japanese_x("画面下の仮想パッドで操作"),
             218,
-            "VIRTUAL PAD BELOW",
+            "画面下の仮想パッドで操作",
             COLOR_MUTED,
+            self._japanese_font,
         )
 
     def _draw_game(self) -> None:
@@ -607,15 +945,17 @@ class MahjongPuzzleApp:
         self._draw_sidebar()
         pyxel.text(
             8,
-            163,
-            "KEYS: ARROWS Z/X SPACE TAB/Y",
+            155,
+            "矢印:移動 Z/X:回転",
             COLOR_MUTED,
+            self._japanese_font,
         )
         pyxel.text(
             8,
-            170,
-            "PAD: D-PAD X/B A BACK/Y",
+            166,
+            "SPACE:確定 TAB:川 Y:役 H:遊び方",
             COLOR_MUTED,
+            self._japanese_font,
         )
 
     def _draw_board(self) -> None:
@@ -686,14 +1026,14 @@ class MahjongPuzzleApp:
     def _draw_sidebar(self) -> None:
         pyxel.rect(
             SIDEBAR_X - 4,
-            BOARD_ORIGIN_Y,
+            SIDEBAR_Y,
             SIDEBAR_WIDTH,
             SIDEBAR_HEIGHT,
             COLOR_PANEL,
         )
         pyxel.rectb(
             SIDEBAR_X - 4,
-            BOARD_ORIGIN_Y,
+            SIDEBAR_Y,
             SIDEBAR_WIDTH,
             SIDEBAR_HEIGHT,
             COLOR_WOOD_EDGE,
@@ -706,13 +1046,13 @@ class MahjongPuzzleApp:
         )
         pyxel.text(
             SIDEBAR_X,
-            BOARD_ORIGIN_Y + 16,
+            BOARD_ORIGIN_Y + 17,
             f"SCORE {self.session.total_score}",
             COLOR_GOLD,
         )
         pyxel.text(
-            SIDEBAR_X,
-            BOARD_ORIGIN_Y + 27,
+            SIDEBAR_X + 54,
+            BOARD_ORIGIN_Y + 17,
             f"COMBO {self.session.turn_state.consecutive_win_turns}",
             COLOR_IVORY,
         )
@@ -720,33 +1060,11 @@ class MahjongPuzzleApp:
         current_name = "-" if current is None else current.kind.value
         pyxel.text(
             SIDEBAR_X,
-            BOARD_ORIGIN_Y + 38,
-            f"CURRENT {current_name}",
+            BOARD_ORIGIN_Y + 29,
+            f"BLOCK {current_name}",
             COLOR_GOLD,
         )
         self._draw_dora_indicators()
-        recent_labels = "".join(
-            f"{tile_label(record.tile.kind):>2}"
-            for record in self.game.river.recent(8)
-        )
-        pyxel.text(
-            SIDEBAR_X,
-            BOARD_ORIGIN_Y + 67,
-            f"R{self.game.river.total_count}:{recent_labels}",
-            COLOR_IVORY,
-        )
-        last = self.session.last_turn
-        last_counts = (
-            "W0 K0"
-            if last is None
-            else f"W{len(last.wins)} K{len(last.kans)}"
-        )
-        pyxel.text(
-            SIDEBAR_X,
-            BOARD_ORIGIN_Y + 78,
-            f"LAST {last_counts}",
-            COLOR_MUTED,
-        )
         pyxel.text(
             SIDEBAR_X,
             BOARD_ORIGIN_Y + NEXT_LABEL_OFFSET_Y,
@@ -789,60 +1107,69 @@ class MahjongPuzzleApp:
             COLOR_IVORY,
         )
         pyxel.text(
-            92,
+            108,
             157,
-            f"SCORE {self.session.total_score}",
+            (
+                "-"
+                if self.game.current_block is None
+                else f"BLOCK {self.game.current_block.kind.value}"
+            ),
             COLOR_GOLD,
         )
         pyxel.text(
             13,
-            167,
-            f"COMBO {self.session.turn_state.consecutive_win_turns}",
-            COLOR_IVORY,
+            170,
+            f"得点 {self.session.total_score}",
+            COLOR_GOLD,
+            self._japanese_font,
         )
-        current = self.game.current_block
-        current_name = "-" if current is None else current.kind.value
-        pyxel.text(92, 167, f"CURRENT {current_name}", COLOR_GOLD)
+        pyxel.text(
+            92,
+            170,
+            f"連続 {self.session.turn_state.consecutive_win_turns}",
+            COLOR_IVORY,
+            self._japanese_font,
+        )
 
-        pyxel.text(13, 181, "DORA", COLOR_IVORY)
+        pyxel.text(13, 184, "DORA", COLOR_IVORY)
         for index, indicator in enumerate(
             self.game.visible_dora_indicators
         ):
             self._blt_tile(
                 34 + index * (TILE_SPRITE_SIZE + 1),
-                176,
+                179,
                 indicator.kind,
             )
-        last = self.session.last_turn
-        last_counts = (
-            "W0 K0"
-            if last is None
-            else f"W{len(last.wins)} K{len(last.kans)}"
-        )
-        pyxel.text(110, 181, f"LAST {last_counts}", COLOR_MUTED)
 
-        pyxel.text(13, 199, "NEXT", COLOR_IVORY)
+        pyxel.text(13, 202, "NEXT", COLOR_IVORY)
         for index, block in enumerate(self.game.next_blocks):
             self._draw_next_block(
                 block,
                 x=43 + index * 39,
-                y=196,
+                y=199,
             )
 
         pyxel.text(
-            13,
-            216,
-            f"RIVER {self.game.river.total_count}",
-            COLOR_MUTED,
+            31,
+            220,
+            "A:確定",
+            COLOR_GOLD,
+            self._japanese_font,
         )
-        pyxel.text(69, 216, "A: PLACE", COLOR_GOLD)
-        pyxel.text(110, 216, "X/B: ROTATE", COLOR_IVORY)
-        for index, record in enumerate(self.game.river.recent(8)):
-            self._blt_tile(
-                24 + index * TILE_SPRITE_SIZE,
-                230,
-                record.tile.kind,
-            )
+        pyxel.text(
+            101,
+            220,
+            "X/B:回転",
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        pyxel.text(
+            37,
+            237,
+            "START:役  BACK:川",
+            COLOR_MUTED,
+            self._japanese_font,
+        )
 
     def _draw_dora_indicators(self) -> None:
         pyxel.text(
@@ -891,30 +1218,46 @@ class MahjongPuzzleApp:
             else COLOR_GOLD
         )
         pyxel.rectb(x + 2, y + 2, width - 4, height - 4, accent)
-        title_x = x + (width - len(notice.title) * 4) // 2
-        pyxel.text(title_x, y + 10, notice.title, accent)
+        title_x = x + (width - self._japanese_text_width(notice.title)) // 2
+        pyxel.text(
+            title_x,
+            y + 10,
+            notice.title,
+            accent,
+            self._japanese_font,
+        )
         for index, line in enumerate(notice.lines):
-            line_x = x + (width - len(line) * 4) // 2
-            pyxel.text(line_x, y + 25 + index * 10, line, COLOR_IVORY)
-        continuation = "ANY CONTROL TO CONTINUE"
-        continuation_x = x + (width - len(continuation) * 4) // 2
+            line_x = x + (width - self._japanese_text_width(line)) // 2
+            pyxel.text(
+                line_x,
+                y + 25 + index * 10,
+                line,
+                COLOR_IVORY,
+                self._japanese_font,
+            )
+        continuation = "いずれかの操作で続ける"
+        continuation_x = (
+            x + (width - self._japanese_text_width(continuation)) // 2
+        )
         pyxel.text(
             continuation_x,
             y + height - 12,
             continuation,
             COLOR_MUTED,
+            self._japanese_font,
         )
 
     def _draw_river_overlay(self) -> None:
         if self.layout is LayoutMode.PORTRAIT:
             self._draw_portrait_river_overlay()
             return
-        self._draw_overlay_panel("RIVER / FULL HISTORY")
+        self._draw_overlay_panel("川・全履歴")
         pyxel.text(
             12,
             25,
-            f"TOTAL {self.game.river.total_count}  EACH COLUMN = ONE TURN",
+            f"合計 {self.game.river.total_count}牌・縦1列が1手番",
             COLOR_IVORY,
+            self._japanese_font,
         )
         for index, record in enumerate(self.game.river.records):
             turn_column = index // 4
@@ -926,15 +1269,22 @@ class MahjongPuzzleApp:
             label = tile_label(record.tile.kind)
             label_x = x + (12 - len(label) * 4) // 2
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
-        pyxel.text(76, 153, "TAB / BACK / B CLOSE", COLOR_MUTED)
+        pyxel.text(
+            76,
+            153,
+            "TAB・BACK・Bで閉じる",
+            COLOR_MUTED,
+            self._japanese_font,
+        )
 
     def _draw_portrait_river_overlay(self) -> None:
-        self._draw_overlay_panel("RIVER / FULL HISTORY")
+        self._draw_overlay_panel("川・全履歴")
         pyxel.text(
             12,
             27,
-            f"TOTAL {self.game.river.total_count} / ONE ROW = ONE TURN",
+            f"合計 {self.game.river.total_count}牌・横1列が1手番",
             COLOR_IVORY,
+            self._japanese_font,
         )
         for index, record in enumerate(self.game.river.records):
             turn = index // 4
@@ -948,10 +1298,16 @@ class MahjongPuzzleApp:
             label = tile_label(record.tile.kind)
             label_x = x + (12 - len(label) * 4) // 2
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
-        pyxel.text(38, 239, "BACK / B CLOSE", COLOR_MUTED)
+        pyxel.text(
+            38,
+            235,
+            "BACK・Bで閉じる",
+            COLOR_MUTED,
+            self._japanese_font,
+        )
 
     def _draw_yaku_overlay(self) -> None:
-        self._draw_overlay_panel("YAKU GUIDE")
+        self._draw_overlay_panel("役一覧")
         if self._japanese_font is None:
             raise RuntimeError("日本語フォントが初期化されていません")
         entry = YAKU_GUIDE_ENTRIES[self._yaku_page]
@@ -1052,12 +1408,17 @@ class MahjongPuzzleApp:
             COLOR_GOLD if entry.yaku in acquired else COLOR_MUTED,
             self._japanese_font,
         )
-        navigation = "< >: PAGE   Y / B: CLOSE"
+        navigation = (
+            "←→:ページ  START・B:閉じる"
+            if self.layout is LayoutMode.PORTRAIT
+            else "←→:ページ  Y・B:閉じる"
+        )
         pyxel.text(
-            self._centered_text_x(navigation),
+            self._centered_japanese_x(navigation),
             navigation_y,
             navigation,
             COLOR_MUTED,
+            self._japanese_font,
         )
 
     def _draw_overlay_panel(self, title: str) -> None:
@@ -1070,7 +1431,13 @@ class MahjongPuzzleApp:
             pyxel.rect(5, 8, 246, 160, COLOR_INK)
             pyxel.rectb(5, 8, 246, 160, COLOR_WOOD_EDGE)
             pyxel.rectb(8, 11, 240, 154, COLOR_MAHOGANY)
-        pyxel.text(12, 16, title, COLOR_GOLD)
+        pyxel.text(
+            12,
+            14,
+            title,
+            COLOR_GOLD,
+            self._japanese_font,
+        )
 
     def _draw_result(self) -> None:
         if self.layout is LayoutMode.PORTRAIT:
@@ -1081,22 +1448,55 @@ class MahjongPuzzleApp:
         pyxel.rect(28, 14, 200, 148, COLOR_PANEL)
         pyxel.rectb(28, 14, 200, 148, COLOR_WOOD_EDGE)
         pyxel.rectb(31, 17, 194, 142, COLOR_MAHOGANY)
-        pyxel.text(96, 28, "GAME RESULT", COLOR_GOLD)
-        pyxel.text(68, 49, f"FINAL SCORE  {summary.total_score}", COLOR_IVORY)
-        pyxel.text(68, 62, f"HIGH SCORE   {self.high_score}", COLOR_GOLD)
-        pyxel.text(68, 79, f"TURNS        {summary.turns}", COLOR_IVORY)
-        pyxel.text(68, 90, f"WINS         {summary.win_count}", COLOR_IVORY)
-        pyxel.text(68, 101, f"KANS         {summary.kan_count}", COLOR_IVORY)
+        title = "対局結果"
         pyxel.text(
-            68,
-            112,
-            f"YAKU TYPES   {len(summary.acquired_yaku)}",
-            COLOR_IVORY,
+            self._centered_japanese_x(title),
+            27,
+            title,
+            COLOR_GOLD,
+            self._japanese_font,
         )
-        pyxel.text(68, 123, f"RIVER TILES  {summary.river_count}", COLOR_IVORY)
-        pyxel.text(76, 141, "R/A/START AGAIN  ESC QUIT", COLOR_BRIGHT_IVORY)
-        if self.persistence_error is not None:
-            pyxel.text(64, 151, "HIGH SCORE SAVE FAILED", COLOR_VERMILION)
+        result_lines = (
+            (f"最終得点  {summary.total_score}", COLOR_IVORY),
+            (f"最高得点  {self.high_score}", COLOR_GOLD),
+            (f"手番      {summary.turns}", COLOR_IVORY),
+            (f"和了      {summary.win_count}", COLOR_IVORY),
+            (f"カン      {summary.kan_count}", COLOR_IVORY),
+            (f"取得役    {len(summary.acquired_yaku)}種", COLOR_IVORY),
+            (f"川の牌    {summary.river_count}枚", COLOR_IVORY),
+        )
+        for index, (line, color) in enumerate(result_lines):
+            pyxel.text(
+                68,
+                46 + index * 12,
+                line,
+                color,
+                self._japanese_font,
+            )
+        pyxel.text(
+            47,
+            134,
+            "R・A:もう一度  H・START:遊び方",
+            COLOR_BRIGHT_IVORY,
+            self._japanese_font,
+        )
+        if self.persistence_error is None:
+            pyxel.text(
+                101,
+                147,
+                "ESC:終了",
+                COLOR_MUTED,
+                self._japanese_font,
+            )
+        else:
+            error_text = "最高得点を保存できません"
+            pyxel.text(
+                self._centered_japanese_x(error_text),
+                147,
+                error_text,
+                COLOR_VERMILION,
+                self._japanese_font,
+            )
 
     def _draw_portrait_result(self) -> None:
         pyxel.cls(COLOR_BACKGROUND)
@@ -1104,40 +1504,58 @@ class MahjongPuzzleApp:
         pyxel.rect(12, 18, 152, 220, COLOR_PANEL)
         pyxel.rectb(12, 18, 152, 220, COLOR_WOOD_EDGE)
         pyxel.rectb(15, 21, 146, 214, COLOR_MAHOGANY)
+        title = "対局結果"
         pyxel.text(
-            self._centered_text_x("GAME RESULT"),
+            self._centered_japanese_x(title),
             39,
-            "GAME RESULT",
+            title,
             COLOR_GOLD,
+            self._japanese_font,
         )
         result_lines = (
-            (f"FINAL SCORE  {summary.total_score}", COLOR_IVORY),
-            (f"HIGH SCORE   {self.high_score}", COLOR_GOLD),
-            (f"TURNS        {summary.turns}", COLOR_IVORY),
-            (f"WINS         {summary.win_count}", COLOR_IVORY),
-            (f"KANS         {summary.kan_count}", COLOR_IVORY),
+            (f"最終得点  {summary.total_score}", COLOR_IVORY),
+            (f"最高得点  {self.high_score}", COLOR_GOLD),
+            (f"手番      {summary.turns}", COLOR_IVORY),
+            (f"和了      {summary.win_count}", COLOR_IVORY),
+            (f"カン      {summary.kan_count}", COLOR_IVORY),
             (
-                f"YAKU TYPES   {len(summary.acquired_yaku)}",
+                f"取得役    {len(summary.acquired_yaku)}種",
                 COLOR_IVORY,
             ),
-            (f"RIVER TILES  {summary.river_count}", COLOR_IVORY),
+            (f"川の牌    {summary.river_count}枚", COLOR_IVORY),
         )
         for index, (line, color) in enumerate(result_lines):
-            pyxel.text(39, 68 + index * 16, line, color)
-        restart = "A / START: AGAIN"
+            pyxel.text(
+                39,
+                68 + index * 16,
+                line,
+                color,
+                self._japanese_font,
+            )
+        restart = "A:もう一度"
         pyxel.text(
-            self._centered_text_x(restart),
+            self._centered_japanese_x(restart),
             198,
             restart,
             COLOR_BRIGHT_IVORY,
+            self._japanese_font,
+        )
+        help_text = "START:遊び方"
+        pyxel.text(
+            self._centered_japanese_x(help_text),
+            214,
+            help_text,
+            COLOR_MUTED,
+            self._japanese_font,
         )
         if self.persistence_error is not None:
-            error_text = "HIGH SCORE SAVE FAILED"
+            error_text = "最高得点を保存できません"
             pyxel.text(
-                self._centered_text_x(error_text),
-                217,
+                self._centered_japanese_x(error_text),
+                226,
                 error_text,
                 COLOR_VERMILION,
+                self._japanese_font,
             )
 
 

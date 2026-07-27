@@ -61,3 +61,21 @@ def test_overlay_cannot_open_while_notification_is_visible() -> None:
 
     assert not ui.open_overlay(ScreenMode.RIVER)
     assert ui.screen is ScreenMode.GAME
+
+
+def test_help_returns_to_screen_that_opened_it() -> None:
+    ui = UiState(screen=ScreenMode.RESULT)
+
+    assert ui.open_help()
+    assert ui.screen is ScreenMode.HELP
+    ui.close_help()
+
+    assert ui.screen is ScreenMode.RESULT
+
+
+def test_help_cannot_open_over_notice() -> None:
+    ui = UiState(screen=ScreenMode.GAME)
+    ui.queue_notifications((notice("WIN"),), game_over=False)
+
+    assert not ui.open_help()
+    assert ui.screen is ScreenMode.GAME

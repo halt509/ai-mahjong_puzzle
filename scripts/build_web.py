@@ -12,6 +12,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PACKAGE = PROJECT_ROOT / "src" / "mahjong_puzzle"
 FONT_ASSETS = PROJECT_ROOT / "assets" / "fonts"
+TUTORIAL_SCREENSHOT = (
+    PROJECT_ROOT / "assets" / "guides" / "tutorial-gameplay.png"
+)
+PEACOCK_SPRITE = (
+    PROJECT_ROOT / "assets" / "sprites" / "peacock-guide.png"
+)
 OUTPUT_DIR = PROJECT_ROOT / "web"
 WEB_APPS = (
     (
@@ -37,6 +43,12 @@ def _build_app(app_name: str, entry: Path, output: Path) -> None:
         )
         shutil.copy2(entry, app_dir / entry.name)
         shutil.copytree(FONT_ASSETS, app_dir / "assets" / "fonts")
+        guide_dir = app_dir / "assets" / "guides"
+        guide_dir.mkdir(parents=True)
+        shutil.copy2(TUTORIAL_SCREENSHOT, guide_dir)
+        sprite_dir = app_dir / "assets" / "sprites"
+        sprite_dir.mkdir(parents=True)
+        shutil.copy2(PEACOCK_SPRITE, sprite_dir)
 
         subprocess.run(
             [

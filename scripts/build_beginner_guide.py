@@ -391,7 +391,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
         ("X / Bボタン", "右回転"),
         ("Space / A", "配置"),
         ("Tab / BACK", "川を見る"),
-        ("Y / Yボタン", "役一覧"),
+        ("Y / START", "役一覧"),
     )
     for index, (key, action) in enumerate(controls):
         y = panel_y1 + 88 + index * 41

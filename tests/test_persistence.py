@@ -6,7 +6,11 @@ from mahjong_puzzle.persistence import (
     HighScoreError,
     HighScoreStore,
     LocalStorageHighScoreStore,
+    LocalStorageTutorialProgressStore,
+    TutorialProgressError,
+    TutorialProgressStore,
     create_default_high_score_store,
+    create_default_tutorial_progress_store,
 )
 
 
@@ -99,3 +103,50 @@ def test_web_runtime_selects_local_storage_backend() -> None:
     )
 
     assert isinstance(store, LocalStorageHighScoreStore)
+
+
+def test_missing_tutorial_progress_file_is_unseen(tmp_path) -> None:
+    store = TutorialProgressStore(tmp_path / "tutorial.json")
+
+    assert not store.load()
+
+
+def test_tutorial_progress_file_remembers_completion(tmp_path) -> None:
+    path = tmp_path / "nested" / "tutorial.json"
+    store = TutorialProgressStore(path)
+
+    store.mark_seen()
+
+    assert store.load()
+    assert json.loads(path.read_text(encoding="utf-8")) == {"seen": True}
+
+
+def test_corrupt_tutorial_progress_file_raises_explicit_error(tmp_path) -> None:
+    path = tmp_path / "tutorial.json"
+    path.write_text("{broken", encoding="utf-8")
+
+    with pytest.raises(TutorialProgressError, match="読み込めません"):
+        TutorialProgressStore(path).load()
+
+
+def test_local_storage_remembers_tutorial_completion() -> None:
+    storage = FakeLocalStorage()
+    store = LocalStorageTutorialProgressStore(storage)
+
+    assert not store.load()
+    store.mark_seen()
+
+    assert store.load()
+    assert json.loads(storage.values[store.key]) == {"seen": True}
+
+
+def test_web_runtime_selects_tutorial_local_storage_backend() -> None:
+    storage = FakeLocalStorage()
+
+    store = create_default_tutorial_progress_store(
+        platform="emscripten",
+        web_storage=storage,
+        web_error_types=(RuntimeError,),
+    )
+
+    assert isinstance(store, LocalStorageTutorialProgressStore)

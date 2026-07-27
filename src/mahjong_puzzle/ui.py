@@ -15,6 +15,7 @@ class ScreenMode(str, Enum):
     GAME = "game"
     RIVER = "river"
     YAKU = "yaku"
+    HELP = "help"
     RESULT = "result"
 
 
@@ -69,16 +70,16 @@ def notices_from_turn(result: ResolvedTurn) -> tuple[Notice, ...]:
     notices: list[Notice] = []
     for event in result.kans:
         indicator = (
-            "DORA LIMIT"
+            "ドラ表示は上限"
             if event.revealed_indicator is None
-            else f"IND {event.revealed_indicator.kind.code.upper()}"
+            else f"表示牌 {event.revealed_indicator.kind.code.upper()}"
         )
         notices.append(
             Notice(
                 kind=NoticeKind.KAN,
-                title="KAN!",
+                title="カン！",
                 lines=(
-                    f"ROW {event.row + 1} / {event.tile_type.code.upper()}",
+                    f"{event.row + 1}行目・{event.tile_type.code.upper()}",
                     indicator,
                 ),
             )
@@ -92,13 +93,13 @@ def notices_from_turn(result: ResolvedTurn) -> tuple[Notice, ...]:
         notices.append(
             Notice(
                 kind=NoticeKind.WIN,
-                title=f"WIN! ROW {event.row + 1}",
+                title=f"{event.row + 1}行目 和了！",
                 lines=(
-                    f"BASE +{event.score.base_win_score}",
-                    f"YAKU {new_names} +{yaku_score}",
+                    f"基本 +{event.score.base_win_score}",
+                    f"役 {new_names} +{yaku_score}",
                     (
-                        f"DORA {event.dora_count} +{event.score.dora_score}"
-                        f" / TOTAL +{event.score.total_score}"
+                        f"ドラ {event.dora_count} +{event.score.dora_score}"
+                        f"・合計 +{event.score.total_score}"
                     ),
                 ),
             )
@@ -142,12 +143,15 @@ class UiState:
     screen: ScreenMode = ScreenMode.TITLE
     _notices: list[Notice] = field(default_factory=list)
     _result_pending: bool = False
+    _help_return_screen: ScreenMode = ScreenMode.TITLE
 
     def __post_init__(self) -> None:
         if not isinstance(self.screen, ScreenMode):
             raise TypeError("screenにはScreenModeが必要です")
         if not all(isinstance(notice, Notice) for notice in self._notices):
             raise TypeError("通知キューにはNoticeだけを指定できます")
+        if not isinstance(self._help_return_screen, ScreenMode):
+            raise TypeError("_help_return_screenにはScreenModeが必要です")
         self._notices = list(self._notices)
 
     @property
@@ -199,3 +203,23 @@ class UiState:
     def close_overlay(self) -> None:
         if self.screen in (ScreenMode.RIVER, ScreenMode.YAKU):
             self.screen = ScreenMode.GAME
+
+    def open_help(self) -> bool:
+        """タイトル・ゲーム・結果から説明を開き、戻り先を保持する。"""
+
+        if (
+            self.screen not in (
+                ScreenMode.TITLE,
+                ScreenMode.GAME,
+                ScreenMode.RESULT,
+            )
+            or self.current_notice is not None
+        ):
+            return False
+        self._help_return_screen = self.screen
+        self.screen = ScreenMode.HELP
+        return True
+
+    def close_help(self) -> None:
+        if self.screen is ScreenMode.HELP:
+            self.screen = self._help_return_screen

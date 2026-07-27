@@ -434,9 +434,9 @@ def test_roleless_basic_shape_wins_first_time_with_base_and_dora_score() -> None
     assert session.line_states[0].has_won
     assert session.line_states[0].win_count == 1
     notice = notices_from_turn(result)[0]
-    assert "BASE +50" in notice.lines
-    assert "YAKU NONE +0" in notice.lines
-    assert "DORA 2 +100 / TOTAL +150" in notice.lines
+    assert "基本 +50" in notice.lines
+    assert "役 NONE +0" in notice.lines
+    assert "ドラ 2 +100・合計 +150" in notice.lines
 
 
 @pytest.mark.parametrize(
