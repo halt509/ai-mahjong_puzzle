@@ -1239,7 +1239,7 @@ class MahjongPuzzleApp:
         )
         pyxel.text(
             continuation_x,
-            y + height - 12,
+            y + height - 16,
             continuation,
             COLOR_MUTED,
             self._japanese_font,

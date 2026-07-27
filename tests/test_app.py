@@ -380,6 +380,64 @@ def test_control_dismisses_notice_without_moving_block(monkeypatch) -> None:
     assert app.game.active_x == original_x
 
 
+def test_notice_text_stays_inside_inner_frame_in_both_layouts(
+    monkeypatch,
+) -> None:
+    class FixedWidthFont:
+        @staticmethod
+        def text_width(text: str) -> int:
+            return len(text) * 5
+
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+
+    for layout in LayoutMode:
+        app = MahjongPuzzleApp(seed=20260724, layout=layout)
+        app._japanese_font = FixedWidthFont()
+        app.ui = UiState(screen=ScreenMode.GAME)
+        app.ui.queue_notifications(
+            (
+                Notice(
+                    kind=NoticeKind.WIN,
+                    title="8行目 和了！",
+                    lines=(
+                        "基本 +100",
+                        "役 SEQ+CHI +1400",
+                        "ドラ 10 +1000・合計 +2500",
+                    ),
+                ),
+            ),
+            game_over=False,
+        )
+        frame_calls: list[tuple[int, int, int, int]] = []
+        text_calls: list[tuple[int, int, str]] = []
+        monkeypatch.setattr(
+            pyxel,
+            "rectb",
+            lambda x, y, width, height, *args: frame_calls.append(
+                (x, y, width, height)
+            ),
+        )
+        monkeypatch.setattr(
+            pyxel,
+            "text",
+            lambda x, y, text, *args: text_calls.append((x, y, text)),
+        )
+
+        app._draw_notice()
+
+        inner_x, inner_y, inner_width, inner_height = frame_calls[-1]
+        inner_right = inner_x + inner_width - 1
+        inner_bottom = inner_y + inner_height - 1
+        japanese_font_height = 10
+        assert all(
+            inner_x < text_x
+            and text_x + app._japanese_text_width(text) - 1 < inner_right
+            and inner_y < text_y
+            and text_y + japanese_font_height - 1 < inner_bottom
+            for text_x, text_y, text in text_calls
+        )
+
+
 def test_gamepad_buttons_are_bound_to_mobile_controls() -> None:
     assert pyxel.GAMEPAD1_BUTTON_DPAD_LEFT in CONTROL_BINDINGS[
         ControlAction.MOVE_LEFT
