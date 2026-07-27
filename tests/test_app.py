@@ -205,11 +205,12 @@ def test_mobile_status_groups_score_and_combo_without_recent_river(
 
     app._draw_mobile_status()
 
-    score = next(call for call in calls if call[2].startswith("得点"))
-    combo = next(call for call in calls if call[2].startswith("連続"))
+    score = next(call for call in calls if call[2].startswith("SCORE"))
+    combo = next(call for call in calls if call[2].startswith("COMBO"))
     labels = {text for _, _, text in calls}
     assert score[1] == combo[1]
     assert "NEXT" in labels
+    assert not any(label.startswith(("得点", "連続")) for label in labels)
     assert not any(
         label.startswith(("RIVER", "LAST", "川 ", "直前"))
         for label in labels
@@ -262,6 +263,34 @@ def test_yaku_overlay_draws_japanese_details_and_tile_example(
     assert entry.description in texts
     assert "3＋3＋2で基本和了・役は追加得点" in texts
     assert tiles == list(entry.example_tiles)
+
+
+def test_portrait_yaku_navigation_fits_above_inner_frame(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+
+    class FixedWidthFont:
+        @staticmethod
+        def text_width(text: str) -> int:
+            return len(text) * 5
+
+    app._japanese_font = FixedWidthFont()
+    calls: list[tuple[int, int, str]] = []
+    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(
+        pyxel,
+        "text",
+        lambda x, y, text, *args: calls.append((x, y, text)),
+    )
+    monkeypatch.setattr(app, "_blt_tile", lambda *args: None)
+
+    app._draw_yaku_overlay()
+
+    navigation = next(call for call in calls if call[2].startswith("←→"))
+    inner_frame_bottom = 11 + 234 - 1
+    japanese_font_height = 10
+    assert navigation[1] + japanese_font_height < inner_frame_bottom
 
 
 def test_all_three_next_previews_fit_inside_sidebar() -> None:

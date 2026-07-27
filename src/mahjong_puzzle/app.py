@@ -1119,16 +1119,14 @@ class MahjongPuzzleApp:
         pyxel.text(
             13,
             170,
-            f"得点 {self.session.total_score}",
+            f"SCORE {self.session.total_score}",
             COLOR_GOLD,
-            self._japanese_font,
         )
         pyxel.text(
             92,
             170,
-            f"連続 {self.session.turn_state.consecutive_win_turns}",
+            f"COMBO {self.session.turn_state.consecutive_win_turns}",
             COLOR_IVORY,
-            self._japanese_font,
         )
 
         pyxel.text(13, 184, "DORA", COLOR_IVORY)
@@ -1320,7 +1318,7 @@ class MahjongPuzzleApp:
         if self.layout is LayoutMode.PORTRAIT:
             name_y, reading_y, description_y = 49, 64, 88
             example_label_y, example_y = 109, 124
-            acquired_y, navigation_y = 153, 235
+            acquired_y, navigation_y = 153, 231
             text_x, points_x = 13, 128
         else:
             name_y, reading_y, description_y = 39, 54, 72
