@@ -1296,10 +1296,11 @@ class MahjongPuzzleApp:
             label = tile_label(record.tile.kind)
             label_x = x + (12 - len(label) * 4) // 2
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
+        navigation = "BACK・Bで閉じる"
         pyxel.text(
-            38,
-            235,
-            "BACK・Bで閉じる",
+            self._centered_japanese_x(navigation),
+            231,
+            navigation,
             COLOR_MUTED,
             self._japanese_font,
         )

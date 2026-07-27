@@ -290,6 +290,38 @@ def test_portrait_yaku_navigation_fits_above_inner_frame(monkeypatch) -> None:
     navigation = next(call for call in calls if call[2].startswith("←→"))
     inner_frame_bottom = 11 + 234 - 1
     japanese_font_height = 10
+    assert navigation[2] == "←→:ページ  START・B:閉じる"
+    assert navigation[1] + japanese_font_height < inner_frame_bottom
+
+
+def test_portrait_river_navigation_is_centered_above_inner_frame(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+
+    class FixedWidthFont:
+        @staticmethod
+        def text_width(text: str) -> int:
+            return len(text) * 5
+
+    app._japanese_font = FixedWidthFont()
+    calls: list[tuple[int, int, str]] = []
+    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(
+        pyxel,
+        "text",
+        lambda x, y, text, *args: calls.append((x, y, text)),
+    )
+
+    app._draw_river_overlay()
+
+    navigation = next(call for call in calls if call[2] == "BACK・Bで閉じる")
+    navigation_width = app._japanese_text_width(navigation[2])
+    inner_frame_bottom = 11 + 234 - 1
+    japanese_font_height = 10
+    assert navigation[0] == (app.screen_width - navigation_width) // 2
     assert navigation[1] + japanese_font_height < inner_frame_bottom
 
 
