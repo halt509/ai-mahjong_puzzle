@@ -365,7 +365,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
         fill=GOLD,
     )
     rules = (
-        "● 「3＋3＋2」または四対子で基本和了（50点）",
+        "● 「3＋3＋2」または四対子で基本和了（500点）",
         "● 同じ行は、新しい役を作ればもう一度和了できる",
         "● 同じ牌4枚でカン。ドラ表示牌が増える",
         "● ドラは加点だけ。ドラだけでは和了できない",
@@ -413,13 +413,13 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
 
     draw.text(
         (MARGIN, 3160),
-        "※一般的な麻雀を8牌向けにアレンジした独自ルールです。点数は現在の仮設定です。",
+        "※一般的な麻雀を8牌向けにアレンジした独自ルール・得点設定です。",
         font=font(21),
         fill=MUTED,
     )
     draw.text(
         (WIDTH - MARGIN, 3192),
-        "更新: 2026-07-26 / AI: GPT-5",
+        "更新: 2026-08-04 / AI: GPT-5",
         font=font(17),
         fill=MUTED,
         anchor="ra",

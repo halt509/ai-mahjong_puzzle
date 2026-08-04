@@ -1,4 +1,4 @@
-"""差し替え可能な仮点数設定と得点内訳。"""
+"""差し替え可能な得点設定と得点内訳。"""
 
 from __future__ import annotations
 
@@ -9,39 +9,39 @@ from typing import Iterable, Mapping
 
 from mahjong_puzzle.yaku import Yaku, YakuEvaluation
 
-BASE_WIN_SCORE = 50
+BASE_WIN_SCORE = 500
 
 
 def _default_yaku_points() -> Mapping[Yaku, int]:
     return MappingProxyType(
         {
-            Yaku.ALL_SEQUENCES: 100,
-            Yaku.ALL_TRIPLETS: 200,
-            Yaku.TANYAO: 100,
-            Yaku.IIPEIKOU: 200,
-            Yaku.HONITSU: 300,
-            Yaku.CHINITSU: 500,
-            Yaku.HONROUTOU: 400,
-            Yaku.YAKUHAI: 200,
-            Yaku.HONOR_PAIR: 100,
-            Yaku.TERMINAL_PAIR: 100,
-            Yaku.TWO_SUIT_SAME_SEQUENCE: 200,
-            Yaku.STEPPED_SEQUENCES: 150,
-            Yaku.THREE_SUITS_USED: 100,
-            Yaku.FOUR_PAIRS: 400,
+            Yaku.ALL_SEQUENCES: 1000,
+            Yaku.ALL_TRIPLETS: 2000,
+            Yaku.TANYAO: 1000,
+            Yaku.IIPEIKOU: 2000,
+            Yaku.HONITSU: 3000,
+            Yaku.CHINITSU: 5000,
+            Yaku.HONROUTOU: 4000,
+            Yaku.YAKUHAI: 2000,
+            Yaku.HONOR_PAIR: 1000,
+            Yaku.TERMINAL_PAIR: 1000,
+            Yaku.TWO_SUIT_SAME_SEQUENCE: 2000,
+            Yaku.STEPPED_SEQUENCES: 1500,
+            Yaku.THREE_SUITS_USED: 1000,
+            Yaku.FOUR_PAIRS: 4000,
         }
     )
 
 
 @dataclass(frozen=True)
 class ScoringConfig:
-    """役の仮点数。全項目をロジック外から差し替えられる。"""
+    """役の得点設定。全項目をロジック外から差し替えられる。"""
 
     yaku_points: Mapping[Yaku, int] = field(default_factory=_default_yaku_points)
     base_win_score: int = BASE_WIN_SCORE
-    dora_point: int = 50
-    combination_bonus_per_extra_yaku: int = 50
-    repeat_win_bonus: int = 100
+    dora_point: int = 500
+    combination_bonus_per_extra_yaku: int = 500
+    repeat_win_bonus: int = 1000
     streak_multiplier_step: Fraction = Fraction(1, 4)
     simultaneous_multiplier_step: Fraction = Fraction(1, 2)
 

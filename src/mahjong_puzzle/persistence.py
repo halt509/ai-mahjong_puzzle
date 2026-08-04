@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+CURRENT_SCORE_UNIT_VERSION = 2
+LEGACY_SCORE_UNIT_VERSION = 1
+SCORE_UNIT_MIGRATION_MULTIPLIER = 10
+
 
 class HighScoreError(RuntimeError):
     """最高得点ファイルの読み書きに失敗した。"""
@@ -47,13 +51,35 @@ def _validate_score(score: int) -> None:
         raise ValueError("得点は0以上の整数でなければなりません")
 
 
-def _score_from_payload(payload: object, *, location: str) -> int:
+def _score_from_payload(
+    payload: object,
+    *,
+    location: str,
+) -> tuple[int, bool]:
     if not isinstance(payload, dict):
         raise HighScoreError(f"最高得点データが不正です: {location}")
     score = payload.get("high_score")
     if not isinstance(score, int) or isinstance(score, bool) or score < 0:
         raise HighScoreError(f"最高得点データが不正です: {location}")
-    return score
+    version = payload.get("score_unit_version", LEGACY_SCORE_UNIT_VERSION)
+    if (
+        not isinstance(version, int)
+        or isinstance(version, bool)
+        or version not in {LEGACY_SCORE_UNIT_VERSION, CURRENT_SCORE_UNIT_VERSION}
+    ):
+        raise HighScoreError(
+            f"最高得点の単位バージョンが不正です: {location}"
+        )
+    if version == LEGACY_SCORE_UNIT_VERSION:
+        return score * SCORE_UNIT_MIGRATION_MULTIPLIER, True
+    return score, False
+
+
+def _score_payload(score: int) -> dict[str, int]:
+    return {
+        "high_score": score,
+        "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+    }
 
 
 def default_high_score_path() -> Path:
@@ -86,7 +112,13 @@ class HighScoreStore:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise HighScoreError(f"最高得点を読み込めません: {self.path}") from error
-        return _score_from_payload(payload, location=str(self.path))
+        score, needs_migration = _score_from_payload(
+            payload,
+            location=str(self.path),
+        )
+        if needs_migration:
+            self._write(score)
+        return score
 
     def record(self, score: int) -> int:
         """現在値より高い場合だけ原子的に保存し、最高得点を返す。"""
@@ -95,17 +127,22 @@ class HighScoreStore:
         current = self.load()
         if score <= current:
             return current
+        self._write(score)
+        return score
+
+    def _write(self, score: int) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.path.with_suffix(self.path.suffix + ".tmp")
             temporary.write_text(
-                json.dumps({"high_score": score}, ensure_ascii=False),
+                json.dumps(_score_payload(score), ensure_ascii=False),
                 encoding="utf-8",
             )
             temporary.replace(self.path)
         except OSError as error:
-            raise HighScoreError(f"最高得点を保存できません: {self.path}") from error
-        return score
+            raise HighScoreError(
+                f"最高得点を保存できません: {self.path}"
+            ) from error
 
 
 @dataclass(frozen=True)
@@ -139,7 +176,13 @@ class LocalStorageHighScoreStore:
             payload = json.loads(str(raw_value))
         except json.JSONDecodeError as error:
             raise HighScoreError("ブラウザの最高得点データが不正です") from error
-        return _score_from_payload(payload, location="ブラウザlocalStorage")
+        score, needs_migration = _score_from_payload(
+            payload,
+            location="ブラウザlocalStorage",
+        )
+        if needs_migration:
+            self._write(score)
+        return score
 
     def record(self, score: int) -> int:
         """現在値より高い場合だけlocalStorageへ保存する。"""
@@ -148,12 +191,15 @@ class LocalStorageHighScoreStore:
         current = self.load()
         if score <= current:
             return current
-        value = json.dumps({"high_score": score}, ensure_ascii=False)
+        self._write(score)
+        return score
+
+    def _write(self, score: int) -> None:
+        value = json.dumps(_score_payload(score), ensure_ascii=False)
         try:
             self.storage.setItem(self.key, value)
         except self.storage_error_types as error:
             raise HighScoreError("ブラウザへ最高得点を保存できません") from error
-        return score
 
 
 def _tutorial_seen_from_payload(payload: object, *, location: str) -> bool:

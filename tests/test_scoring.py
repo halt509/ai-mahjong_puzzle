@@ -22,7 +22,7 @@ def test_only_new_yaku_contribute_yaku_points() -> None:
         simultaneous_line_count=1,
     )
 
-    assert result.base_win_score == DEFAULT_SCORING_CONFIG.base_win_score == 50
+    assert result.base_win_score == DEFAULT_SCORING_CONFIG.base_win_score == 500
     assert result.yaku_points == {Yaku.ALL_SEQUENCES: DEFAULT_SCORING_CONFIG.yaku_points[Yaku.ALL_SEQUENCES]}
     assert result.combination_bonus > 0
 
@@ -73,10 +73,10 @@ def test_roleless_basic_win_can_include_dora_score() -> None:
         simultaneous_line_count=1,
     )
 
-    assert result.base_win_score == 50
+    assert result.base_win_score == 500
     assert result.yaku_points == {}
-    assert result.dora_score == 150
-    assert result.total_score == 200
+    assert result.dora_score == 1500
+    assert result.total_score == 2000
 
 
 def test_acquired_yaku_cannot_be_passed_as_new() -> None:
@@ -156,16 +156,39 @@ def test_rewin_with_new_yaku_also_includes_base_win_score() -> None:
 
     assert selected is not None
     assert selected.new_yaku == {Yaku.IIPEIKOU}
-    assert selected.score.base_win_score == 50
+    assert selected.score.base_win_score == 500
 
 
 def test_phase5_yaku_points_are_configured() -> None:
-    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.HONOR_PAIR] == 100
-    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.TERMINAL_PAIR] == 100
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.HONOR_PAIR] == 1000
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.TERMINAL_PAIR] == 1000
     assert (
         DEFAULT_SCORING_CONFIG.yaku_points[Yaku.TWO_SUIT_SAME_SEQUENCE]
-        == 200
+        == 2000
     )
-    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.STEPPED_SEQUENCES] == 150
-    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.THREE_SUITS_USED] == 100
-    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.FOUR_PAIRS] == 400
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.STEPPED_SEQUENCES] == 1500
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.THREE_SUITS_USED] == 1000
+    assert DEFAULT_SCORING_CONFIG.yaku_points[Yaku.FOUR_PAIRS] == 4000
+
+
+def test_phase7_scoring_values_are_ten_times_the_previous_unit() -> None:
+    assert DEFAULT_SCORING_CONFIG.base_win_score == 500
+    assert DEFAULT_SCORING_CONFIG.dora_point == 500
+    assert DEFAULT_SCORING_CONFIG.combination_bonus_per_extra_yaku == 500
+    assert DEFAULT_SCORING_CONFIG.repeat_win_bonus == 1000
+    assert DEFAULT_SCORING_CONFIG.yaku_points == {
+        Yaku.ALL_SEQUENCES: 1000,
+        Yaku.ALL_TRIPLETS: 2000,
+        Yaku.TANYAO: 1000,
+        Yaku.IIPEIKOU: 2000,
+        Yaku.HONITSU: 3000,
+        Yaku.CHINITSU: 5000,
+        Yaku.HONROUTOU: 4000,
+        Yaku.YAKUHAI: 2000,
+        Yaku.HONOR_PAIR: 1000,
+        Yaku.TERMINAL_PAIR: 1000,
+        Yaku.TWO_SUIT_SAME_SEQUENCE: 2000,
+        Yaku.STEPPED_SEQUENCES: 1500,
+        Yaku.THREE_SUITS_USED: 1000,
+        Yaku.FOUR_PAIRS: 4000,
+    }

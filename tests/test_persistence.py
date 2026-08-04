@@ -3,6 +3,7 @@ import json
 import pytest
 
 from mahjong_puzzle.persistence import (
+    CURRENT_SCORE_UNIT_VERSION,
     HighScoreError,
     HighScoreStore,
     LocalStorageHighScoreStore,
@@ -44,7 +45,38 @@ def test_only_a_higher_score_is_saved(tmp_path) -> None:
     assert store.record(1200) == 1200
     assert store.record(900) == 1200
     assert store.record(1500) == 1500
-    assert json.loads(path.read_text(encoding="utf-8")) == {"high_score": 1500}
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "high_score": 1500,
+        "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+    }
+
+
+def test_legacy_high_score_file_is_migrated_only_once(tmp_path) -> None:
+    path = tmp_path / "score.json"
+    path.write_text(json.dumps({"high_score": 1200}), encoding="utf-8")
+    store = HighScoreStore(path)
+
+    assert store.load() == 12000
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "high_score": 12000,
+        "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+    }
+    assert store.load() == 12000
+
+
+def test_current_high_score_file_is_not_migrated(tmp_path) -> None:
+    path = tmp_path / "score.json"
+    path.write_text(
+        json.dumps(
+            {
+                "high_score": 12000,
+                "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert HighScoreStore(path).load() == 12000
 
 
 def test_corrupt_high_score_file_raises_explicit_error(tmp_path) -> None:
@@ -69,7 +101,34 @@ def test_local_storage_persists_only_the_highest_score() -> None:
     assert store.record(1200) == 1200
     assert store.record(900) == 1200
     assert store.record(1500) == 1500
-    assert json.loads(storage.values[store.key]) == {"high_score": 1500}
+    assert json.loads(storage.values[store.key]) == {
+        "high_score": 1500,
+        "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+    }
+
+
+def test_legacy_local_storage_high_score_is_migrated_only_once() -> None:
+    storage = FakeLocalStorage()
+    store = LocalStorageHighScoreStore(storage)
+    storage.values[store.key] = json.dumps({"high_score": 1200})
+
+    assert store.load() == 12000
+    assert json.loads(storage.values[store.key]) == {
+        "high_score": 12000,
+        "score_unit_version": CURRENT_SCORE_UNIT_VERSION,
+    }
+    assert store.load() == 12000
+
+
+def test_unknown_score_unit_version_is_rejected() -> None:
+    storage = FakeLocalStorage()
+    store = LocalStorageHighScoreStore(storage)
+    storage.values[store.key] = json.dumps(
+        {"high_score": 1200, "score_unit_version": 999}
+    )
+
+    with pytest.raises(HighScoreError, match="単位バージョン"):
+        store.load()
 
 
 def test_corrupt_local_storage_raises_explicit_error() -> None:

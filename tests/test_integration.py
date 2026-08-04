@@ -212,7 +212,7 @@ def test_new_kan_dora_scores_on_another_changed_row_in_same_turn() -> None:
     assert [event.row for event in result.kans] == [0]
     assert [event.row for event in result.wins] == [1]
     assert result.wins[0].dora_count == 2
-    assert result.wins[0].score.dora_score == 100
+    assert result.wins[0].score.dora_score == 1000
     assert result.consecutive_win_turns == 1
 
 
@@ -427,16 +427,16 @@ def test_roleless_basic_shape_wins_first_time_with_base_and_dora_score() -> None
     win = result.wins[0]
     assert win.current_yaku == frozenset()
     assert win.new_yaku == frozenset()
-    assert win.score.base_win_score == 50
+    assert win.score.base_win_score == 500
     assert win.dora_count == 2
-    assert win.score.dora_score == 100
-    assert win.score.total_score == 150
+    assert win.score.dora_score == 1000
+    assert win.score.total_score == 1500
     assert session.line_states[0].has_won
     assert session.line_states[0].win_count == 1
     notice = notices_from_turn(result)[0]
-    assert "基本 +50" in notice.lines
+    assert "基本 +500" in notice.lines
     assert "役 NONE +0" in notice.lines
-    assert "ドラ 2 +100・合計 +150" in notice.lines
+    assert "ドラ 2 +1000・合計 +1500" in notice.lines
 
 
 @pytest.mark.parametrize(
@@ -487,7 +487,7 @@ def test_each_normal_shape_type_gets_an_initial_basic_win(
     result = session.place_active()
 
     assert len(result.wins) == 1
-    assert result.wins[0].score.base_win_score == 50
+    assert result.wins[0].score.base_win_score == 500
 
 
 def test_roleless_basic_shape_cannot_rewin_without_new_yaku() -> None:
@@ -553,7 +553,7 @@ def test_new_yaku_after_roleless_win_can_rewin_and_gets_base_score() -> None:
     assert len(result.wins) == 1
     win = result.wins[0]
     assert win.new_yaku
-    assert win.score.base_win_score == 50
+    assert win.score.base_win_score == 500
     assert session.line_states[0].has_won
     assert session.line_states[0].win_count == 2
 
@@ -620,8 +620,8 @@ def test_four_pairs_wins_without_a_normal_decomposition() -> None:
     win = result.wins[0]
     assert isinstance(win.evaluation.decomposition, FourPairsDecomposition)
     assert win.new_yaku == {Yaku.FOUR_PAIRS}
-    assert win.score.yaku_points == {Yaku.FOUR_PAIRS: 400}
-    assert win.score.base_win_score == 50
+    assert win.score.yaku_points == {Yaku.FOUR_PAIRS: 4000}
+    assert win.score.base_win_score == 500
 
 
 def test_new_kan_still_takes_priority_over_four_pairs_evaluation() -> None:
@@ -679,7 +679,7 @@ def test_rewin_scores_only_a_new_phase5_yaku() -> None:
     assert len(result.wins) == 1
     win = result.wins[0]
     assert win.new_yaku == {Yaku.HONOR_PAIR}
-    assert win.score.yaku_points == {Yaku.HONOR_PAIR: 100}
+    assert win.score.yaku_points == {Yaku.HONOR_PAIR: 1000}
 
 
 def test_acquired_phase5_yaku_alone_does_not_rewin() -> None:
