@@ -1,4 +1,4 @@
-"""フェーズ6の初心者説明を含む画面・入力・音のPyxelアプリ。"""
+"""初心者説明とフェーズ7の開始演出・BGMを含むPyxelアプリ。"""
 
 from __future__ import annotations
 
@@ -109,6 +109,33 @@ PLACEMENT_KNOCK_SOUND = (
     "fn",
     2,
 )
+PREPARATION_DURATION_FRAMES = 42
+EFFECT_CHANNELS = frozenset((0, 1, 2))
+BGM_CHANNEL = 3
+BGM_MUSIC_INDEX = 0
+SHUFFLE_RATTLE_SOUND_INDEX = 5
+SHUFFLE_KNOCK_SOUND_INDEX = 6
+BGM_SOUND_INDICES = (7, 8, 9, 10)
+SHUFFLE_RATTLE_SOUND = (
+    "c4d4e4rc4d4e4rc4d4e4",
+    "nnnnnnnnnnn",
+    "76507650765",
+    "fffffffffff",
+    3,
+)
+SHUFFLE_KNOCK_SOUND = (
+    "c3rc3rc3",
+    "ppppp",
+    "60506",
+    "fnfnf",
+    6,
+)
+BGM_SOUNDS = (
+    ("c3re3rg3re3r", "tttttttt", "20201010", "nnnnnnnn", 18),
+    ("a2rc3re3rc3r", "tttttttt", "20201010", "nnnnnnnn", 18),
+    ("d3rf3ra3rf3r", "tttttttt", "20201010", "nnnnnnnn", 18),
+    ("g2rc3rd3re3r", "tttttttt", "20201010", "nnnnnnnn", 18),
+)
 
 _SUIT_COLORS = {
     Suit.MANZU: COLOR_VERMILION,
@@ -151,6 +178,7 @@ class ControlAction(str, Enum):
     START_GAME = "start_game"
     RESTART_GAME = "restart_game"
     HELP = "help"
+    TOGGLE_BGM = "toggle_bgm"
     CANCEL = "cancel"
     QUIT = "quit"
 
@@ -213,6 +241,10 @@ CONTROL_BINDINGS: dict[ControlAction, tuple[int, ...]] = {
         pyxel.KEY_H,
         pyxel.GAMEPAD1_BUTTON_START,
     ),
+    ControlAction.TOGGLE_BGM: (
+        pyxel.KEY_M,
+        pyxel.GAMEPAD1_BUTTON_BACK,
+    ),
     ControlAction.CANCEL: (
         pyxel.KEY_ESCAPE,
         pyxel.GAMEPAD1_BUTTON_B,
@@ -257,7 +289,7 @@ def tile_color(kind: TileType) -> int:
 
 
 class MahjongPuzzleApp:
-    """ゲーム進行とフェーズ6 UIを接続するPyxelアダプター。"""
+    """ゲーム進行と画面・入力・音を接続するPyxelアダプター。"""
 
     def __init__(
         self,
@@ -273,6 +305,10 @@ class MahjongPuzzleApp:
         self.layout = layout
         self._japanese_font: pyxel.Font | None = None
         self._yaku_page = 0
+        self._preparation_frames_remaining = 0
+        self._preparation_is_restart = False
+        self._bgm_muted = False
+        self._bgm_playing = False
         self.tutorial = TutorialState()
         self.high_score_store = (
             high_score_store
@@ -357,6 +393,18 @@ class MahjongPuzzleApp:
 
         return self.tutorial.page_index
 
+    @property
+    def preparation_frames_remaining(self) -> int:
+        return self._preparation_frames_remaining
+
+    @property
+    def preparation_is_restart(self) -> bool:
+        return self._preparation_is_restart
+
+    @property
+    def bgm_muted(self) -> bool:
+        return self._bgm_muted
+
     def _new_session(self) -> None:
         self.session = GameSession.new(seed=self.seed)
         self.game: GameState = self.session.game
@@ -434,6 +482,16 @@ class MahjongPuzzleApp:
         pyxel.sounds[2].set("c3e3g3c4e4", "sssss", "66777", "nnnnn", 4)
         pyxel.sounds[3].set("g3e3c3", "ppp", "655", "fff", 8)
         pyxel.sounds[4].set(*PLACEMENT_KNOCK_SOUND)
+        pyxel.sounds[SHUFFLE_RATTLE_SOUND_INDEX].set(*SHUFFLE_RATTLE_SOUND)
+        pyxel.sounds[SHUFFLE_KNOCK_SOUND_INDEX].set(*SHUFFLE_KNOCK_SOUND)
+        for sound_index, sound in zip(BGM_SOUND_INDICES, BGM_SOUNDS):
+            pyxel.sounds[sound_index].set(*sound)
+        pyxel.musics[BGM_MUSIC_INDEX].set(
+            [],
+            [],
+            [],
+            list(BGM_SOUND_INDICES),
+        )
 
     @staticmethod
     def _pressed(*keys: int) -> bool:
@@ -454,11 +512,21 @@ class MahjongPuzzleApp:
                 self._record_result_if_needed()
             return
 
+        if self.ui.screen is ScreenMode.PREPARING:
+            self._preparation_frames_remaining = max(
+                0,
+                self._preparation_frames_remaining - 1,
+            )
+            if self._preparation_frames_remaining == 0:
+                self.ui.finish_preparation()
+                self._start_bgm()
+            return
+
         if self.ui.screen is ScreenMode.TITLE:
             if self._action_pressed(ControlAction.HELP):
                 self._open_help()
             elif self._action_pressed(ControlAction.START_GAME):
-                self.ui.start_game()
+                self._begin_game_preparation(restart=False)
             elif self._action_pressed(ControlAction.QUIT):
                 pyxel.quit()
             return
@@ -471,6 +539,8 @@ class MahjongPuzzleApp:
             elif self._action_pressed(ControlAction.PLACE):
                 if not self.tutorial.next_page():
                     self._close_help()
+            elif self._action_pressed(ControlAction.TOGGLE_BGM):
+                self._toggle_bgm()
             elif self._action_pressed(
                 ControlAction.CANCEL
             ) or self._action_pressed(ControlAction.HELP):
@@ -478,7 +548,9 @@ class MahjongPuzzleApp:
             return
 
         if self.ui.screen is ScreenMode.RIVER:
-            if self._action_pressed(
+            if self._action_pressed(ControlAction.PLACE):
+                self._toggle_bgm()
+            elif self._action_pressed(
                 ControlAction.TOGGLE_RIVER
             ) or self._action_pressed(ControlAction.CANCEL):
                 self.ui.close_overlay()
@@ -503,8 +575,7 @@ class MahjongPuzzleApp:
             if self._action_pressed(ControlAction.HELP):
                 self._open_help()
             elif self._action_pressed(ControlAction.RESTART_GAME):
-                self._new_session()
-                self.ui = UiState(screen=ScreenMode.GAME)
+                self._begin_game_preparation(restart=True)
             elif self._action_pressed(ControlAction.QUIT):
                 pyxel.quit()
             return
@@ -538,12 +609,48 @@ class MahjongPuzzleApp:
             result = self.session.place_active()
             self.ui.accept_turn(result)
             pyxel.play(0, 0)
-            pyxel.play(3, 4)
+            pyxel.play(1, 4)
             if result.kans:
                 pyxel.play(1, 1)
             if result.wins:
                 pyxel.play(2, 2)
             self._record_result_if_needed()
+
+    def _begin_game_preparation(self, *, restart: bool) -> None:
+        if restart:
+            self._new_session()
+        self._stop_bgm()
+        self.ui.start_game()
+        self._preparation_frames_remaining = PREPARATION_DURATION_FRAMES
+        self._preparation_is_restart = restart
+        pyxel.play(0, SHUFFLE_RATTLE_SOUND_INDEX)
+        pyxel.play(1, SHUFFLE_KNOCK_SOUND_INDEX)
+
+    def _start_bgm(self) -> None:
+        if self._bgm_muted or self._bgm_playing:
+            return
+        pyxel.playm(BGM_MUSIC_INDEX, loop=True)
+        self._bgm_playing = True
+
+    def _stop_bgm(self) -> None:
+        if not self._bgm_playing:
+            return
+        pyxel.stop(BGM_CHANNEL)
+        self._bgm_playing = False
+
+    def _toggle_bgm(self) -> None:
+        self._bgm_muted = not self._bgm_muted
+        if self._bgm_muted:
+            self._stop_bgm()
+        elif self.ui.screen in (
+            ScreenMode.GAME,
+            ScreenMode.RIVER,
+            ScreenMode.YAKU,
+        ) or (
+            self.ui.screen is ScreenMode.HELP
+            and self.ui.help_return_screen is ScreenMode.GAME
+        ):
+            self._start_bgm()
 
     def _open_help(self) -> None:
         if self.ui.open_help():
@@ -564,19 +671,23 @@ class MahjongPuzzleApp:
     def _record_result_if_needed(self) -> None:
         if self.ui.screen is not ScreenMode.RESULT or self._result_recorded:
             return
+        self._stop_bgm()
         self._result_recorded = True
         try:
             self.high_score = self.high_score_store.record(self.session.total_score)
             self.persistence_error = None
         except HighScoreError as error:
             self.persistence_error = str(error)
-        pyxel.play(3, 3)
+        pyxel.play(2, 3)
 
     def draw(self) -> None:
         """現在画面と必要なオーバーレイを描画する。"""
 
         if self.ui.screen is ScreenMode.TITLE:
             self._draw_title()
+            return
+        if self.ui.screen is ScreenMode.PREPARING:
+            self._draw_preparation()
             return
         if self.ui.screen is ScreenMode.RESULT:
             self._draw_result()
@@ -592,6 +703,52 @@ class MahjongPuzzleApp:
             self._draw_yaku_overlay()
         if self.ui.current_notice is not None:
             self._draw_notice()
+
+    def _draw_preparation(self) -> None:
+        pyxel.cls(COLOR_BACKGROUND)
+        if self.layout is LayoutMode.PORTRAIT:
+            x, y, width, height = 13, 72, 150, 112
+        else:
+            x, y, width, height = 40, 34, 176, 108
+        pyxel.rect(x, y, width, height, COLOR_PANEL)
+        pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
+        pyxel.rectb(x + 3, y + 3, width - 6, height - 6, COLOR_MAHOGANY)
+        title = "雀卓清掃中"
+        pyxel.text(
+            self._centered_japanese_x(title),
+            y + 14,
+            title,
+            COLOR_GOLD,
+            self._japanese_font,
+        )
+        subtitle = (
+            "新しい対局へ切り替えます"
+            if self._preparation_is_restart
+            else "対局を準備しています"
+        )
+        pyxel.text(
+            self._centered_japanese_x(subtitle),
+            y + 31,
+            subtitle,
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        elapsed = PREPARATION_DURATION_FRAMES - self._preparation_frames_remaining
+        start_x = (self.screen_width - 8 * 14) // 2
+        for index in range(8):
+            tile_x = start_x + index * 14
+            tile_y = y + 53 + ((elapsed // 3 + index) % 3 - 1)
+            pyxel.rect(tile_x + 2, tile_y + 2, 12, 16, COLOR_MAHOGANY)
+            pyxel.rect(tile_x, tile_y, 12, 16, COLOR_IVORY)
+            pyxel.rectb(tile_x, tile_y, 12, 16, COLOR_WOOD_EDGE)
+            pyxel.rect(tile_x + 3, tile_y + 3, 6, 10, COLOR_TABLE)
+        dots = "." * (1 + (elapsed // 8) % 3)
+        pyxel.text(
+            self._centered_text_x(dots),
+            y + 82,
+            dots,
+            COLOR_MUTED,
+        )
 
     def _draw_help(self) -> None:
         """共通内容を横・縦それぞれの説明画面へ収めて描く。"""
@@ -737,10 +894,20 @@ class MahjongPuzzleApp:
                 COLOR_INDIGO,
                 self._japanese_font,
             )
+        bgm_status = "OFF" if self._bgm_muted else "ON"
+        bgm_help = f"M/BACK:BGM {bgm_status}"
         footer = "←→  B/ESC:閉じる"
+        footer_y = 231 if self.layout is LayoutMode.PORTRAIT else footer_y
+        pyxel.text(
+            self._centered_japanese_x(bgm_help),
+            footer_y - 12,
+            bgm_help,
+            COLOR_GOLD if not self._bgm_muted else COLOR_MUTED,
+            self._japanese_font,
+        )
         pyxel.text(
             self._centered_japanese_x(footer),
-            footer_y if self.layout is LayoutMode.LANDSCAPE else 231,
+            footer_y,
             footer,
             COLOR_MUTED,
             self._japanese_font,
@@ -1250,6 +1417,7 @@ class MahjongPuzzleApp:
             self._draw_portrait_river_overlay()
             return
         self._draw_overlay_panel("川・全履歴")
+        self._draw_river_bgm_control()
         pyxel.text(
             12,
             25,
@@ -1277,6 +1445,7 @@ class MahjongPuzzleApp:
 
     def _draw_portrait_river_overlay(self) -> None:
         self._draw_overlay_panel("川・全履歴")
+        self._draw_river_bgm_control()
         pyxel.text(
             12,
             27,
@@ -1302,6 +1471,18 @@ class MahjongPuzzleApp:
             231,
             navigation,
             COLOR_MUTED,
+            self._japanese_font,
+        )
+
+    def _draw_river_bgm_control(self) -> None:
+        status = "OFF" if self._bgm_muted else "ON"
+        prefix = "A:BGM" if self.layout is LayoutMode.PORTRAIT else "SPACE/A:BGM"
+        label = f"{prefix} {status}"
+        pyxel.text(
+            self.screen_width - self._japanese_text_width(label) - 12,
+            14,
+            label,
+            COLOR_GOLD if not self._bgm_muted else COLOR_MUTED,
             self._japanese_font,
         )
 

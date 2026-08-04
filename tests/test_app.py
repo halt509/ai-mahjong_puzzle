@@ -1,14 +1,18 @@
 import pyxel
 
 from mahjong_puzzle.app import (
+    BGM_CHANNEL,
+    BGM_SOUNDS,
     BOARD_ORIGIN_Y,
     CONTROL_BINDINGS,
+    EFFECT_CHANNELS,
     NEXT_CELL_SIZE,
     NEXT_CELL_STEP,
     NEXT_ITEM_SPACING,
     NEXT_START_OFFSET_Y,
     PLACEMENT_KNOCK_SOUND,
     PLACEMENT_RATTLE_SOUND,
+    PREPARATION_DURATION_FRAMES,
     PORTRAIT_BOARD_ORIGIN_X,
     PORTRAIT_BOARD_ORIGIN_Y,
     PORTRAIT_SCREEN_HEIGHT,
@@ -66,6 +70,19 @@ def test_placement_sound_layers_short_noise_and_tile_knock() -> None:
 
     _, knock_tones, _, _, _ = PLACEMENT_KNOCK_SOUND
     assert set(knock_tones) == {"p"}
+
+
+def test_bgm_uses_a_channel_reserved_from_effects() -> None:
+    assert BGM_CHANNEL == 3
+    assert BGM_CHANNEL not in EFFECT_CHANNELS
+
+
+def test_bgm_is_quiet_and_uses_a_slow_sparse_phrase() -> None:
+    for notes, tones, volumes, effects, speed in BGM_SOUNDS:
+        assert len(tones) == len(volumes) == len(effects) == 8
+        assert notes.count("r") == 4
+        assert max(int(volume) for volume in volumes) <= 2
+        assert speed >= 18
 
 
 def test_app_construction_does_not_start_pyxel_loop() -> None:
@@ -477,13 +494,38 @@ def test_gamepad_starts_game_and_moves_active_block(monkeypatch) -> None:
     app = MahjongPuzzleApp(seed=20260725)
     pressed = {pyxel.GAMEPAD1_BUTTON_A}
     monkeypatch.setattr(pyxel, "btnp", lambda key: key in pressed)
+    shuffle_calls: list[tuple[int, int]] = []
+    bgm_calls: list[tuple[int, bool]] = []
+    monkeypatch.setattr(
+        pyxel,
+        "play",
+        lambda channel, sound, *args, **kwargs: shuffle_calls.append(
+            (channel, sound)
+        ),
+    )
+    monkeypatch.setattr(
+        pyxel,
+        "playm",
+        lambda music, *args, **kwargs: bgm_calls.append(
+            (music, kwargs.get("loop", False))
+        ),
+    )
+    monkeypatch.setattr(pyxel, "stop", lambda *args: None)
 
     app.update()
 
+    assert app.ui.screen is ScreenMode.PREPARING
+    assert app.preparation_frames_remaining == PREPARATION_DURATION_FRAMES
+    assert len(shuffle_calls) == 2
+
+    pressed.clear()
+    for _ in range(PREPARATION_DURATION_FRAMES):
+        app.update()
+
     assert app.ui.screen is ScreenMode.GAME
+    assert bgm_calls == [(0, True)]
 
     original_x = app.game.active_x
-    pressed.clear()
     pressed.add(pyxel.GAMEPAD1_BUTTON_DPAD_LEFT)
 
     app.update()
@@ -494,16 +536,23 @@ def test_gamepad_starts_game_and_moves_active_block(monkeypatch) -> None:
 def test_gamepad_a_places_active_block(monkeypatch) -> None:
     app = MahjongPuzzleApp(seed=20260725)
     app.ui = UiState(screen=ScreenMode.GAME)
+    played_channels: list[int] = []
     monkeypatch.setattr(
         pyxel,
         "btnp",
         lambda key: key == pyxel.GAMEPAD1_BUTTON_A,
     )
-    monkeypatch.setattr(pyxel, "play", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        pyxel,
+        "play",
+        lambda channel, *args, **kwargs: played_channels.append(channel),
+    )
 
     app.update()
 
     assert app.game.turn == 1
+    assert played_channels
+    assert set(played_channels) <= EFFECT_CHANNELS
 
 
 def test_gamepad_opens_and_closes_overlays(monkeypatch) -> None:
@@ -529,6 +578,59 @@ def test_gamepad_opens_and_closes_overlays(monkeypatch) -> None:
     assert app.ui.screen is ScreenMode.YAKU
 
 
+def test_place_button_toggles_bgm_without_closing_river(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.GAME)
+    app._bgm_playing = True
+    app.ui.open_overlay(ScreenMode.RIVER)
+    pressed = {pyxel.GAMEPAD1_BUTTON_A}
+    monkeypatch.setattr(pyxel, "btnp", lambda key: key in pressed)
+    stopped: list[int] = []
+    started: list[tuple[int, bool]] = []
+    monkeypatch.setattr(pyxel, "stop", lambda channel: stopped.append(channel))
+    monkeypatch.setattr(
+        pyxel,
+        "playm",
+        lambda music, *args, **kwargs: started.append(
+            (music, kwargs.get("loop", False))
+        ),
+    )
+
+    app.update()
+
+    assert app.ui.screen is ScreenMode.RIVER
+    assert app.bgm_muted
+    assert stopped == [BGM_CHANNEL]
+
+    app.update()
+
+    assert app.ui.screen is ScreenMode.RIVER
+    assert not app.bgm_muted
+    assert started == [(0, True)]
+
+
+def test_river_draws_bgm_control_in_both_layouts(monkeypatch) -> None:
+    for layout, expected in (
+        (LayoutMode.LANDSCAPE, "SPACE/A:BGM ON"),
+        (LayoutMode.PORTRAIT, "A:BGM ON"),
+    ):
+        app = MahjongPuzzleApp(seed=20260725, layout=layout)
+        app._japanese_font = object()
+        texts: list[str] = []
+        monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+        monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+        monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+        monkeypatch.setattr(
+            pyxel,
+            "text",
+            lambda _x, _y, text, *args: texts.append(text),
+        )
+
+        app._draw_river_overlay()
+
+        assert expected in texts
+
+
 def test_gamepad_a_restarts_from_result(monkeypatch) -> None:
     app = MahjongPuzzleApp(seed=20260725)
     app.ui = UiState(screen=ScreenMode.RESULT)
@@ -538,11 +640,70 @@ def test_gamepad_a_restarts_from_result(monkeypatch) -> None:
         "btnp",
         lambda key: key == pyxel.GAMEPAD1_BUTTON_A,
     )
+    monkeypatch.setattr(pyxel, "play", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pyxel, "stop", lambda *args: None)
 
     app.update()
 
-    assert app.ui.screen is ScreenMode.GAME
+    assert app.ui.screen is ScreenMode.PREPARING
+    assert app.preparation_is_restart
     assert app.session is not previous_session
+
+
+def test_restart_preparation_draws_clear_transition_message(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app._japanese_font = object()
+    app.ui = UiState(screen=ScreenMode.RESULT)
+    monkeypatch.setattr(pyxel, "play", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pyxel, "stop", lambda *args: None)
+    app._begin_game_preparation(restart=True)
+    texts: list[str] = []
+    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rect", lambda *args: None)
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(
+        pyxel,
+        "text",
+        lambda _x, _y, text, *args: texts.append(text),
+    )
+
+    app.draw()
+
+    assert "雀卓清掃中" in texts
+    assert "新しい対局へ切り替えます" in texts
+
+
+def test_help_toggles_bgm_without_assigning_gamepad_y(monkeypatch) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    app.ui = UiState(screen=ScreenMode.GAME)
+    app._bgm_playing = True
+    app._open_help()
+    monkeypatch.setattr(pyxel, "btnp", lambda key: key == pyxel.KEY_M)
+    stopped: list[int] = []
+    started: list[tuple[int, bool]] = []
+    monkeypatch.setattr(pyxel, "stop", lambda channel: stopped.append(channel))
+    monkeypatch.setattr(
+        pyxel,
+        "playm",
+        lambda music, *args, **kwargs: started.append(
+            (music, kwargs.get("loop", False))
+        ),
+    )
+
+    app.update()
+
+    assert app.bgm_muted
+    assert stopped == [BGM_CHANNEL]
+
+    app.update()
+
+    assert not app.bgm_muted
+    assert started == [(0, True)]
+    assert pyxel.GAMEPAD1_BUTTON_Y not in CONTROL_BINDINGS[
+        ControlAction.TOGGLE_BGM
+    ]
 
 
 def test_gamepad_start_opens_help_from_title(monkeypatch) -> None:

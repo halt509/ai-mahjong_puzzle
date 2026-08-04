@@ -10,6 +10,8 @@ def test_ui_starts_at_title_and_enters_game() -> None:
 
     assert ui.screen is ScreenMode.TITLE
     ui.start_game()
+    assert ui.screen is ScreenMode.PREPARING
+    ui.finish_preparation()
     assert ui.screen is ScreenMode.GAME
 
 

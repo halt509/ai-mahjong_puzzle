@@ -1,4 +1,4 @@
-"""画面遷移、14役対応の通知キュー、結果集計。"""
+"""準備状態を含む画面遷移、14役対応の通知キュー、結果集計。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from mahjong_puzzle.yaku import Yaku
 
 class ScreenMode(str, Enum):
     TITLE = "title"
+    PREPARING = "preparing"
     GAME = "game"
     RIVER = "river"
     YAKU = "yaku"
@@ -158,10 +159,18 @@ class UiState:
     def current_notice(self) -> Notice | None:
         return self._notices[0] if self._notices else None
 
+    @property
+    def help_return_screen(self) -> ScreenMode:
+        return self._help_return_screen
+
     def start_game(self) -> None:
-        self.screen = ScreenMode.GAME
+        self.screen = ScreenMode.PREPARING
         self._notices.clear()
         self._result_pending = False
+
+    def finish_preparation(self) -> None:
+        if self.screen is ScreenMode.PREPARING:
+            self.screen = ScreenMode.GAME
 
     def queue_notifications(
         self, notices: Iterable[Notice], *, game_over: bool
