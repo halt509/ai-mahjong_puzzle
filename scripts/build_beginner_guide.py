@@ -419,7 +419,7 @@ def draw_footer(draw: ImageDraw.ImageDraw) -> None:
     )
     draw.text(
         (WIDTH - MARGIN, 3192),
-        "更新: 2026-08-04 / AI: GPT-5",
+        "更新: 2026-08-05 / AI: GPT-5",
         font=font(17),
         fill=MUTED,
         anchor="ra",

@@ -114,6 +114,19 @@ def test_peacock_sprite_is_in_source_and_both_web_apps() -> None:
         assert f"{root}/assets/sprites/peacock-guide.png" in names
 
 
+def test_rejected_formal_tile_atlas_is_not_bundled() -> None:
+    assert not (
+        PROJECT_ROOT / "assets" / "sprites" / "mahjong-tiles-formal.png"
+    ).exists()
+
+    for web_app in (WEB_APP, MOBILE_WEB_APP):
+        with ZipFile(web_app) as archive:
+            assert not any(
+                name.endswith("mahjong-tiles-formal.png")
+                for name in archive.namelist()
+            )
+
+
 def test_both_web_apps_include_tutorial_local_storage_key() -> None:
     for web_app, root in (
         (WEB_APP, "mahjong-puzzle"),

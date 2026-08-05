@@ -411,7 +411,7 @@ class MahjongPuzzleApp:
         self._result_recorded = False
 
     def run(self) -> None:
-        """Pyxelウィンドウ、麻雀テーマ、仮スプライト、音を初期化する。"""
+        """Pyxelウィンドウ、麻雀テーマ、採用牌、音を初期化する。"""
 
         pyxel.init(
             self.screen_width,

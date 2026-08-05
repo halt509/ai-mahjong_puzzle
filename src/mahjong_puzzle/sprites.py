@@ -1,4 +1,4 @@
-"""34牌種の16×16仮スプライトアトラス。"""
+"""34牌種の16×16採用スプライトアトラス。"""
 
 from __future__ import annotations
 
@@ -152,7 +152,10 @@ def _draw_bitmap(
 
 
 def build_placeholder_tile_atlas(image: Any) -> None:
-    """Pyxel Image互換バンクへ差し替え可能な仮牌スプライトを描く。"""
+    """Pyxel Image互換バンクへ採用した牌スプライトを描く。
+
+    関数名は既存APIとの互換性のため維持する。
+    """
 
     for tile_type, (u, v) in iter_tile_sprite_entries():
         _draw_face(image, u, v)

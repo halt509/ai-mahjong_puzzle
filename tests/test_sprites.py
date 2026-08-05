@@ -39,6 +39,7 @@ def test_suits_and_honors_use_expected_atlas_rows() -> None:
 class PixelImage:
     def __init__(self) -> None:
         self.pixels: dict[tuple[int, int], int] = {}
+        self.text_calls: list[tuple[int, int, str, int]] = []
 
     def pset(self, x: int, y: int, color: int) -> None:
         self.pixels[(x, y)] = color
@@ -76,8 +77,19 @@ class PixelImage:
     def text(
         self, x: int, y: int, value: str, color: int
     ) -> None:
-        # このテストではPyxel組み込みフォントの形状は対象外。
-        del x, y, value, color
+        self.text_calls.append((x, y, value, color))
+
+
+def test_adopted_tiles_keep_original_face_and_manzu_label() -> None:
+    image = PixelImage()
+    build_placeholder_tile_atlas(image)
+    u, v = tile_sprite_uv(TileType.suited(Suit.MANZU, 1))
+
+    assert image.pixels[(u + 1, v + 13)] == 5
+    assert image.pixels[(u + 13, v + 13)] == 5
+    assert image.pixels[(u + 14, v + 14)] == 4
+    assert (u + 3, v + 2, "1", 12) in image.text_calls
+    assert (u + 5, v + 8, "M", 8) in image.text_calls
 
 
 def test_transparency_does_not_erase_dark_souzu_details() -> None:
