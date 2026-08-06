@@ -3,9 +3,19 @@ import pyxel
 from mahjong_puzzle.app import (
     BGM_CHANNEL,
     BGM_SOUNDS,
+    BOARD_ORIGIN_X,
     BOARD_ORIGIN_Y,
     CONTROL_BINDINGS,
     EFFECT_CHANNELS,
+    GAME_TITLE_FRAME_HEIGHT,
+    GAME_TITLE_FRAME_WIDTH,
+    LANDSCAPE_CONTROLS_DIVIDER_Y,
+    LANDSCAPE_CONTROLS_HEIGHT,
+    LANDSCAPE_CONTROLS_WIDTH,
+    LANDSCAPE_CONTROLS_X,
+    LANDSCAPE_CONTROLS_Y,
+    LANDSCAPE_MAIN_WIDTH,
+    LANDSCAPE_MAIN_X,
     NEXT_CELL_SIZE,
     NEXT_CELL_STEP,
     NEXT_ITEM_SPACING,
@@ -17,7 +27,11 @@ from mahjong_puzzle.app import (
     PORTRAIT_BOARD_ORIGIN_Y,
     PORTRAIT_SCREEN_HEIGHT,
     PORTRAIT_SCREEN_WIDTH,
+    SCREEN_HEIGHT,
     SIDEBAR_HEIGHT,
+    SIDEBAR_FRAME_X,
+    SIDEBAR_WIDTH,
+    SIDEBAR_X,
     SIDEBAR_Y,
     TITLE_INNER_HEIGHT,
     TITLE_INNER_Y,
@@ -103,14 +117,51 @@ def test_portrait_layout_uses_mobile_screen_and_centered_board() -> None:
     assert PORTRAIT_BOARD_ORIGIN_X * 2 + 8 * 16 == PORTRAIT_SCREEN_WIDTH
 
 
-def test_landscape_layout_keeps_existing_dimensions_and_board_origin() -> None:
+def test_landscape_layout_centers_board_and_sidebar_group() -> None:
     app = MahjongPuzzleApp(seed=20260725)
 
     assert app.layout is LayoutMode.LANDSCAPE
     assert app.screen_width == 256
-    assert app.screen_height == 176
-    assert app.board_origin_x == 8
-    assert app.board_origin_y == 24
+    assert app.screen_height == SCREEN_HEIGHT == 192
+    assert app.board_origin_x == BOARD_ORIGIN_X == 9
+    assert app.board_origin_y == BOARD_ORIGIN_Y == 20
+    assert LANDSCAPE_MAIN_X == BOARD_ORIGIN_X - 2 == 7
+    assert LANDSCAPE_MAIN_WIDTH == 242
+    sidebar_right = SIDEBAR_FRAME_X + SIDEBAR_WIDTH
+    assert LANDSCAPE_MAIN_X == app.screen_width - sidebar_right
+    assert SIDEBAR_X - SIDEBAR_FRAME_X == 8
+    assert LANDSCAPE_CONTROLS_Y - (SIDEBAR_Y + SIDEBAR_HEIGHT) == 2
+
+
+def test_landscape_game_title_frame_is_horizontally_centered(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260725)
+    panels: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        app,
+        "_draw_decorated_panel",
+        lambda x, y, width, height, **_kwargs: panels.append(
+            (x, y, width, height)
+        ),
+    )
+    monkeypatch.setattr(pyxel, "text", lambda *args: None)
+
+    app._draw_game_title_frame()
+
+    assert panels == [
+        (
+            (app.screen_width - GAME_TITLE_FRAME_WIDTH) // 2,
+            2,
+            GAME_TITLE_FRAME_WIDTH,
+            GAME_TITLE_FRAME_HEIGHT,
+        )
+    ]
+    title_y = panels[0][1]
+    title_bottom = title_y + GAME_TITLE_FRAME_HEIGHT
+    board_frame_y = BOARD_ORIGIN_Y - 2
+    assert title_y == 2
+    assert board_frame_y - title_bottom == 2
 
 
 def test_portrait_game_uses_mobile_status_instead_of_sidebar(monkeypatch) -> None:
@@ -118,6 +169,8 @@ def test_portrait_game_uses_mobile_status_instead_of_sidebar(monkeypatch) -> Non
     calls: list[str] = []
     monkeypatch.setattr(pyxel, "cls", lambda *args: None)
     monkeypatch.setattr(pyxel, "text", lambda *args: None)
+    monkeypatch.setattr(app, "_draw_background", lambda: None)
+    monkeypatch.setattr(app, "_draw_game_title_frame", lambda: None)
     monkeypatch.setattr(app, "_draw_board", lambda: calls.append("board"))
     monkeypatch.setattr(app, "_draw_preview", lambda: calls.append("preview"))
     monkeypatch.setattr(
@@ -159,21 +212,53 @@ def test_mobile_status_always_shows_essential_controls(monkeypatch) -> None:
 def test_landscape_bottom_controls_are_japanese(monkeypatch) -> None:
     app = MahjongPuzzleApp(seed=20260725)
     app._japanese_font = object()
-    texts: list[tuple[int, str]] = []
-    monkeypatch.setattr(pyxel, "cls", lambda *args: None)
+    texts: list[tuple[int, int, str]] = []
+    rects: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        pyxel,
+        "rect",
+        lambda x, y, width, height, *args: rects.append(
+            (x, y, width, height)
+        ),
+    )
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
     monkeypatch.setattr(
         pyxel,
         "text",
-        lambda _x, y, text, *args: texts.append((y, text)),
+        lambda x, y, text, *args: texts.append((x, y, text)),
     )
-    monkeypatch.setattr(app, "_draw_board", lambda: None)
-    monkeypatch.setattr(app, "_draw_preview", lambda: None)
-    monkeypatch.setattr(app, "_draw_sidebar", lambda: None)
 
-    app._draw_game()
+    app._draw_landscape_controls()
 
-    assert (155, "矢印:移動 Z/X:回転") in texts
-    assert (166, "SPACE:確定 TAB:川 Y:役 H:遊び方") in texts
+    text_x = LANDSCAPE_CONTROLS_X + 8
+    assert (text_x, 158, "矢印:移動 Z/X:回転") in texts
+    assert (
+        text_x,
+        170,
+        "SPACE:確定 TAB:川 Y:役 H:遊び方",
+    ) in texts
+    assert LANDSCAPE_CONTROLS_X == BOARD_ORIGIN_X - 2
+    assert LANDSCAPE_CONTROLS_WIDTH == LANDSCAPE_MAIN_WIDTH
+    assert LANDSCAPE_CONTROLS_HEIGHT == 35
+    assert text_x - LANDSCAPE_CONTROLS_X == 8
+    assert 158 - LANDSCAPE_CONTROLS_Y == 6
+    assert (
+        LANDSCAPE_CONTROLS_Y + LANDSCAPE_CONTROLS_HEIGHT - (170 + 10)
+        == 7
+    )
+    assert (
+        LANDSCAPE_CONTROLS_X,
+        LANDSCAPE_CONTROLS_Y,
+        LANDSCAPE_CONTROLS_WIDTH,
+        LANDSCAPE_CONTROLS_HEIGHT,
+    ) in rects
+
+    divider_y = LANDSCAPE_CONTROLS_DIVIDER_Y
+    left_line = next(rect for rect in rects if rect == (92, divider_y, 32, 1))
+    right_line = next(rect for rect in rects if rect == (132, divider_y, 32, 1))
+    assert 128 - (left_line[0] + left_line[2]) == right_line[0] - 128
+    assert LANDSCAPE_CONTROLS_Y + LANDSCAPE_CONTROLS_HEIGHT < divider_y
+    assert divider_y < SCREEN_HEIGHT
 
 
 def test_desktop_status_groups_score_and_combo_without_river_or_last(
@@ -843,6 +928,7 @@ def test_help_draws_japanese_content_and_bird(monkeypatch) -> None:
     assert bird_calls
     assert screenshot_calls
     screenshot = screenshot_calls[0]
+    assert screenshot[3:5] == (BOARD_ORIGIN_X, BOARD_ORIGIN_Y)
     assert screenshot[5:7] == (128, 64)
     assert not any("A:次へ" in text for text in texts)
 

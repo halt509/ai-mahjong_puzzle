@@ -35,22 +35,34 @@ from mahjong_puzzle.yaku import YAKU_DISPLAY_NAMES, Yaku
 from mahjong_puzzle.yaku_catalog import YAKU_GUIDE_ENTRIES
 
 SCREEN_WIDTH = 256
-SCREEN_HEIGHT = 176
+SCREEN_HEIGHT = 192
+LANDSCAPE_BASE_SCREEN_HEIGHT = 176
+LANDSCAPE_VERTICAL_OFFSET = (SCREEN_HEIGHT - LANDSCAPE_BASE_SCREEN_HEIGHT) // 2
 PORTRAIT_SCREEN_WIDTH = 176
 PORTRAIT_SCREEN_HEIGHT = 256
 TITLE_INNER_Y = 16
 TITLE_INNER_HEIGHT = 144
 TITLE_TEXT_Y = 34
 TITLE_QUIT_Y = 137
-BOARD_ORIGIN_X = 8
-BOARD_ORIGIN_Y = 24
+BOARD_ORIGIN_X = 9
+BOARD_ORIGIN_Y = 20
 PORTRAIT_BOARD_ORIGIN_X = 24
 PORTRAIT_BOARD_ORIGIN_Y = 18
 CELL_SIZE = 16
-SIDEBAR_X = 144
+LANDSCAPE_MAIN_X = BOARD_ORIGIN_X - 2
+LANDSCAPE_MAIN_WIDTH = SCREEN_WIDTH - LANDSCAPE_MAIN_X * 2
+SIDEBAR_FRAME_X = 141
+SIDEBAR_X = SIDEBAR_FRAME_X + 8
 SIDEBAR_WIDTH = 108
 SIDEBAR_Y = BOARD_ORIGIN_Y - 2
 SIDEBAR_HEIGHT = BOARD_HEIGHT * CELL_SIZE + 4
+GAME_TITLE_FRAME_WIDTH = 104
+GAME_TITLE_FRAME_HEIGHT = 14
+LANDSCAPE_CONTROLS_X = LANDSCAPE_MAIN_X
+LANDSCAPE_CONTROLS_Y = 152
+LANDSCAPE_CONTROLS_WIDTH = LANDSCAPE_MAIN_WIDTH
+LANDSCAPE_CONTROLS_HEIGHT = 35
+LANDSCAPE_CONTROLS_DIVIDER_Y = 190
 DORA_TILE_X = SIDEBAR_X + 22
 DORA_TILE_Y = BOARD_ORIGIN_Y + 40
 NEXT_LABEL_OFFSET_Y = 61
@@ -93,6 +105,22 @@ _PALETTE = (
     0x988A73,
     0xC85D75,
     0xFFFFFF,
+)
+
+_CLOUD_WIDTH = 22
+_CLOUD_PIXEL_RECTS = (
+    (3, 1, 5, 1),
+    (2, 2, 1, 3),
+    (3, 4, 4, 1),
+    (6, 3, 1, 2),
+    (7, 2, 4, 1),
+    (10, 3, 1, 3),
+    (8, 5, 9, 1),
+    (16, 3, 1, 2),
+    (17, 2, 4, 1),
+    (20, 3, 1, 4),
+    (4, 7, 18, 1),
+    (1, 6, 4, 1),
 )
 
 PLACEMENT_RATTLE_SOUND = (
@@ -680,6 +708,163 @@ class MahjongPuzzleApp:
             self.persistence_error = str(error)
         pyxel.play(2, 3)
 
+    def _draw_background(self) -> None:
+        """深緑の卓面へ、枠の下に隠れる控えめな雲文様を描く。"""
+
+        pyxel.cls(COLOR_BACKGROUND)
+        if self.layout is LayoutMode.PORTRAIT:
+            clouds = (
+                (-2, 9, False),
+                (self.screen_width - 20, 42, True),
+                (-3, 139, False),
+                (self.screen_width - 19, 235, True),
+            )
+        else:
+            clouds = (
+                (-2, 12, False),
+                (self.screen_width - 20, 11, True),
+                (-3, 137, False),
+                (self.screen_width - 19, 139, True),
+            )
+        for x, y, mirrored in clouds:
+            self._draw_cloud(x, y, mirrored=mirrored)
+
+    @staticmethod
+    def _draw_cloud(x: int, y: int, *, mirrored: bool) -> None:
+        for offset_x, offset_y, width, height in _CLOUD_PIXEL_RECTS:
+            if mirrored:
+                offset_x = _CLOUD_WIDTH - offset_x - width
+            pyxel.rect(
+                x + offset_x,
+                y + offset_y,
+                width,
+                height,
+                COLOR_PANEL,
+            )
+
+    @staticmethod
+    def _draw_frame_corners(x: int, y: int, width: int, height: int) -> None:
+        """2pxの縁内へ雷紋風の段付き角飾りを描く。"""
+
+        length = 7
+        inner_length = 4
+        right = x + width - 1
+        bottom = y + height - 1
+        for horizontal_x, horizontal_y, vertical_x, vertical_y in (
+            (x, y, x, y),
+            (right - length + 1, y, right, y),
+            (x, bottom, x, bottom - length + 1),
+            (right - length + 1, bottom, right, bottom - length + 1),
+        ):
+            pyxel.rect(horizontal_x, horizontal_y, length, 1, COLOR_GOLD)
+            pyxel.rect(vertical_x, vertical_y, 1, length, COLOR_GOLD)
+        pyxel.rect(x + 2, y + 1, inner_length, 1, COLOR_GOLD)
+        pyxel.rect(x + 1, y + 2, 1, inner_length, COLOR_GOLD)
+        pyxel.rect(right - inner_length - 1, y + 1, inner_length, 1, COLOR_GOLD)
+        pyxel.rect(right - 1, y + 2, 1, inner_length, COLOR_GOLD)
+        pyxel.rect(x + 2, bottom - 1, inner_length, 1, COLOR_GOLD)
+        pyxel.rect(x + 1, bottom - inner_length - 1, 1, inner_length, COLOR_GOLD)
+        pyxel.rect(
+            right - inner_length - 1,
+            bottom - 1,
+            inner_length,
+            1,
+            COLOR_GOLD,
+        )
+        pyxel.rect(
+            right - 1,
+            bottom - inner_length - 1,
+            1,
+            inner_length,
+            COLOR_GOLD,
+        )
+
+    @classmethod
+    def _draw_decorated_panel(
+        cls,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        *,
+        fill_color: int = COLOR_PANEL,
+        inner_color: int = COLOR_MAHOGANY,
+        inner_inset: int = 3,
+    ) -> None:
+        pyxel.rect(x, y, width, height, fill_color)
+        pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
+        pyxel.rectb(
+            x + inner_inset,
+            y + inner_inset,
+            width - inner_inset * 2,
+            height - inner_inset * 2,
+            inner_color,
+        )
+        cls._draw_frame_corners(x, y, width, height)
+
+    def _draw_game_title_frame(self) -> None:
+        x = (self.screen_width - GAME_TITLE_FRAME_WIDTH) // 2
+        y = 1 if self.layout is LayoutMode.PORTRAIT else 2
+        self._draw_decorated_panel(
+            x,
+            y,
+            GAME_TITLE_FRAME_WIDTH,
+            GAME_TITLE_FRAME_HEIGHT,
+            fill_color=COLOR_INK,
+            inner_inset=2,
+        )
+        title = "MAHJONG TILE PUZZLE"
+        pyxel.text(self._centered_text_x(title), y + 4, title, COLOR_GOLD)
+
+    def _draw_landscape_controls(self) -> None:
+        self._draw_decorated_panel(
+            LANDSCAPE_CONTROLS_X,
+            LANDSCAPE_CONTROLS_Y,
+            LANDSCAPE_CONTROLS_WIDTH,
+            LANDSCAPE_CONTROLS_HEIGHT,
+            inner_inset=2,
+        )
+        text_x = LANDSCAPE_CONTROLS_X + 8
+        pyxel.text(
+            text_x,
+            LANDSCAPE_CONTROLS_Y + 6,
+            "矢印:移動 Z/X:回転",
+            COLOR_IVORY,
+            self._japanese_font,
+        )
+        pyxel.text(
+            text_x,
+            LANDSCAPE_CONTROLS_Y + 18,
+            "SPACE:確定 TAB:川 Y:役 H:遊び方",
+            COLOR_MUTED,
+            self._japanese_font,
+        )
+        self._draw_centered_divider(LANDSCAPE_CONTROLS_DIVIDER_Y)
+
+    def _draw_centered_divider(self, y: int) -> None:
+        """画面中央を軸に、左右同長の線と翡翠色の留め飾りを描く。"""
+
+        center_x = self.screen_width // 2
+        half_gap = 4
+        line_length = 32
+        pyxel.rect(
+            center_x - half_gap - line_length,
+            y,
+            line_length,
+            1,
+            COLOR_GOLD,
+        )
+        pyxel.rect(
+            center_x + half_gap,
+            y,
+            line_length,
+            1,
+            COLOR_GOLD,
+        )
+        pyxel.rect(center_x - 1, y - 2, 3, 1, COLOR_GOLD)
+        pyxel.rect(center_x - 2, y - 1, 5, 1, COLOR_GOLD)
+        pyxel.rect(center_x - 1, y, 3, 1, COLOR_TABLE)
+
     def draw(self) -> None:
         """現在画面と必要なオーバーレイを描画する。"""
 
@@ -705,14 +890,17 @@ class MahjongPuzzleApp:
             self._draw_notice()
 
     def _draw_preparation(self) -> None:
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
         if self.layout is LayoutMode.PORTRAIT:
             x, y, width, height = 13, 72, 150, 112
         else:
-            x, y, width, height = 40, 34, 176, 108
-        pyxel.rect(x, y, width, height, COLOR_PANEL)
-        pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
-        pyxel.rectb(x + 3, y + 3, width - 6, height - 6, COLOR_MAHOGANY)
+            x, y, width, height = (
+                40,
+                34 + LANDSCAPE_VERTICAL_OFFSET,
+                176,
+                108,
+            )
+        self._draw_decorated_panel(x, y, width, height)
         title = "雀卓清掃中"
         pyxel.text(
             self._centered_japanese_x(title),
@@ -756,7 +944,7 @@ class MahjongPuzzleApp:
         if self._japanese_font is None:
             raise RuntimeError("日本語フォントが初期化されていません")
         page = self.tutorial.page
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
         if self.layout is LayoutMode.PORTRAIT:
             panel = (5, 8, 166, 240)
             bird_x, bird_y = 14, 28
@@ -765,19 +953,23 @@ class MahjongPuzzleApp:
             max_chars = 14
             footer_y = 218
         else:
-            panel = (5, 8, 246, 160)
-            bird_x, bird_y = 10, 34
-            bubble = (54, 25, 188, 116)
-            title_y, line_y, line_step = 35, 55, 17
+            offset = LANDSCAPE_VERTICAL_OFFSET
+            panel = (5, 8 + offset, 246, 160)
+            bird_x, bird_y = 10, 34 + offset
+            bubble = (54, 25 + offset, 188, 116)
+            title_y, line_y, line_step = 35 + offset, 55 + offset, 17
             max_chars = 18
-            footer_y = 153
+            footer_y = 153 + offset
         x, y, width, height = panel
-        pyxel.rect(x, y, width, height, COLOR_PANEL)
-        pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
-        pyxel.rectb(x + 3, y + 3, width - 6, height - 6, COLOR_MAHOGANY)
+        self._draw_decorated_panel(x, y, width, height)
         pyxel.text(
             12,
-            16,
+            16
+            + (
+                LANDSCAPE_VERTICAL_OFFSET
+                if self.layout is LayoutMode.LANDSCAPE
+                else 0
+            ),
             "遊び方",
             COLOR_GOLD,
             self._japanese_font,
@@ -785,7 +977,12 @@ class MahjongPuzzleApp:
         page_label = f"{self.tutorial_page + 1}/{len(TUTORIAL_PAGES)}"
         pyxel.text(
             self.screen_width - len(page_label) * 4 - 12,
-            18,
+            18
+            + (
+                LANDSCAPE_VERTICAL_OFFSET
+                if self.layout is LayoutMode.LANDSCAPE
+                else 0
+            ),
             page_label,
             COLOR_GOLD,
         )
@@ -843,8 +1040,8 @@ class MahjongPuzzleApp:
                 screenshot_x,
                 screenshot_y,
                 TUTORIAL_IMAGE_BANK,
-                8,
-                24,
+                BOARD_ORIGIN_X,
+                BOARD_ORIGIN_Y,
                 128,
                 64,
             )
@@ -943,18 +1140,22 @@ class MahjongPuzzleApp:
         if self.layout is LayoutMode.PORTRAIT:
             self._draw_portrait_title()
             return
-        pyxel.cls(COLOR_BACKGROUND)
-        pyxel.rect(12, 12, 232, 152, COLOR_PANEL)
-        pyxel.rectb(12, 12, 232, 152, COLOR_WOOD_EDGE)
-        pyxel.rectb(
-            16,
-            TITLE_INNER_Y,
-            224,
-            TITLE_INNER_HEIGHT,
-            COLOR_MAHOGANY,
+        self._draw_background()
+        offset = LANDSCAPE_VERTICAL_OFFSET
+        self._draw_decorated_panel(
+            12,
+            12 + offset,
+            232,
+            152,
+            inner_inset=4,
         )
         title = "MAHJONG TILE PUZZLE"
-        pyxel.text(centered_text_x(title), TITLE_TEXT_Y, title, COLOR_GOLD)
+        pyxel.text(
+            centered_text_x(title),
+            TITLE_TEXT_Y + offset,
+            title,
+            COLOR_GOLD,
+        )
         sample_types = (
             TileType.honor_tile(Honor.EAST),
             TileType.suited(Suit.PINZU, 5),
@@ -966,11 +1167,11 @@ class MahjongPuzzleApp:
         )
         sample_x = (SCREEN_WIDTH - sample_width) // 2
         for index, tile_type in enumerate(sample_types):
-            self._blt_tile(sample_x + index * 18, 56, tile_type)
+            self._blt_tile(sample_x + index * 18, 56 + offset, tile_type)
         tagline = "牌を上書きして役を作ろう"
         pyxel.text(
             self._centered_japanese_x(tagline),
-            84,
+            84 + offset,
             tagline,
             COLOR_IVORY,
             self._japanese_font,
@@ -978,7 +1179,7 @@ class MahjongPuzzleApp:
         start_text = "SPACE・ENTER・Aで開始"
         pyxel.text(
             self._centered_japanese_x(start_text),
-            101,
+            101 + offset,
             start_text,
             COLOR_BRIGHT_IVORY,
             self._japanese_font,
@@ -986,7 +1187,7 @@ class MahjongPuzzleApp:
         help_text = "H・STARTで遊び方"
         pyxel.text(
             self._centered_japanese_x(help_text),
-            113,
+            113 + offset,
             help_text,
             COLOR_MUTED,
             self._japanese_font,
@@ -994,7 +1195,7 @@ class MahjongPuzzleApp:
         high_score_text = f"最高得点 {self.high_score}"
         pyxel.text(
             self._centered_japanese_x(high_score_text),
-            125,
+            125 + offset,
             high_score_text,
             COLOR_GOLD,
             self._japanese_font,
@@ -1007,7 +1208,7 @@ class MahjongPuzzleApp:
             error_text = "保存領域を使えません"
             pyxel.text(
                 self._centered_japanese_x(error_text),
-                137,
+                137 + offset,
                 error_text,
                 COLOR_VERMILION,
                 self._japanese_font,
@@ -1016,17 +1217,21 @@ class MahjongPuzzleApp:
             quit_text = "ESC: 終了"
             pyxel.text(
                 self._centered_japanese_x(quit_text),
-                TITLE_QUIT_Y,
+                TITLE_QUIT_Y + offset,
                 quit_text,
                 COLOR_MUTED,
                 self._japanese_font,
             )
 
     def _draw_portrait_title(self) -> None:
-        pyxel.cls(COLOR_BACKGROUND)
-        pyxel.rect(8, 10, 160, 236, COLOR_PANEL)
-        pyxel.rectb(8, 10, 160, 236, COLOR_WOOD_EDGE)
-        pyxel.rectb(12, 14, 152, 228, COLOR_MAHOGANY)
+        self._draw_background()
+        self._draw_decorated_panel(
+            8,
+            10,
+            160,
+            236,
+            inner_inset=4,
+        )
         title = "MAHJONG TILE PUZZLE"
         pyxel.text(self._centered_text_x(title), 42, title, COLOR_GOLD)
         sample_types = (
@@ -1094,44 +1299,42 @@ class MahjongPuzzleApp:
         )
 
     def _draw_game(self) -> None:
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
+        self._draw_game_title_frame()
         if self.layout is LayoutMode.PORTRAIT:
-            pyxel.text(
-                self._centered_text_x("MAHJONG TILE PUZZLE"),
-                4,
-                "MAHJONG TILE PUZZLE",
-                COLOR_IVORY,
-            )
             self._draw_board()
             self._draw_preview()
             self._draw_mobile_status()
             return
-        pyxel.text(8, 6, "MAHJONG TILE PUZZLE", COLOR_IVORY)
         self._draw_board()
         self._draw_preview()
         self._draw_sidebar()
-        pyxel.text(
-            8,
-            155,
-            "矢印:移動 Z/X:回転",
-            COLOR_MUTED,
-            self._japanese_font,
-        )
-        pyxel.text(
-            8,
-            166,
-            "SPACE:確定 TAB:川 Y:役 H:遊び方",
-            COLOR_MUTED,
-            self._japanese_font,
-        )
+        self._draw_landscape_controls()
 
     def _draw_board(self) -> None:
+        frame_x = self.board_origin_x - 2
+        frame_y = self.board_origin_y - 2
+        frame_width = BOARD_WIDTH * CELL_SIZE + 4
+        frame_height = BOARD_HEIGHT * CELL_SIZE + 4
         pyxel.rect(
-            self.board_origin_x - 2,
-            self.board_origin_y - 2,
-            BOARD_WIDTH * CELL_SIZE + 4,
-            BOARD_HEIGHT * CELL_SIZE + 4,
+            frame_x,
+            frame_y,
+            frame_width,
+            frame_height,
             COLOR_MAHOGANY,
+        )
+        pyxel.rectb(
+            frame_x,
+            frame_y,
+            frame_width,
+            frame_height,
+            COLOR_WOOD_EDGE,
+        )
+        self._draw_frame_corners(
+            frame_x,
+            frame_y,
+            frame_width,
+            frame_height,
         )
         for y in range(BOARD_HEIGHT):
             for x in range(BOARD_WIDTH):
@@ -1191,19 +1394,12 @@ class MahjongPuzzleApp:
             )
 
     def _draw_sidebar(self) -> None:
-        pyxel.rect(
-            SIDEBAR_X - 4,
+        self._draw_decorated_panel(
+            SIDEBAR_FRAME_X,
             SIDEBAR_Y,
             SIDEBAR_WIDTH,
             SIDEBAR_HEIGHT,
-            COLOR_PANEL,
-        )
-        pyxel.rectb(
-            SIDEBAR_X - 4,
-            SIDEBAR_Y,
-            SIDEBAR_WIDTH,
-            SIDEBAR_HEIGHT,
-            COLOR_WOOD_EDGE,
+            inner_inset=2,
         )
         pyxel.text(
             SIDEBAR_X,
@@ -1253,19 +1449,12 @@ class MahjongPuzzleApp:
         """縦画面の盤面下へ、プレイ中の情報をコンパクトに描画する。"""
 
         panel_x, panel_y, panel_width, panel_height = 8, 152, 160, 98
-        pyxel.rect(
+        self._draw_decorated_panel(
             panel_x,
             panel_y,
             panel_width,
             panel_height,
-            COLOR_PANEL,
-        )
-        pyxel.rectb(
-            panel_x,
-            panel_y,
-            panel_width,
-            panel_height,
-            COLOR_WOOD_EDGE,
+            inner_inset=2,
         )
         pyxel.text(
             13,
@@ -1374,7 +1563,12 @@ class MahjongPuzzleApp:
         if self.layout is LayoutMode.PORTRAIT:
             x, y, width, height = 6, 83, 164, 84
         else:
-            x, y, width, height = 42, 50, 172, 76
+            x, y, width, height = (
+                42,
+                50 + LANDSCAPE_VERTICAL_OFFSET,
+                172,
+                76,
+            )
         pyxel.rect(x, y, width, height, COLOR_INK)
         pyxel.rectb(x, y, width, height, COLOR_WOOD_EDGE)
         accent = (
@@ -1383,6 +1577,7 @@ class MahjongPuzzleApp:
             else COLOR_GOLD
         )
         pyxel.rectb(x + 2, y + 2, width - 4, height - 4, accent)
+        self._draw_frame_corners(x, y, width, height)
         title_x = x + (width - self._japanese_text_width(notice.title)) // 2
         pyxel.text(
             title_x,
@@ -1418,9 +1613,10 @@ class MahjongPuzzleApp:
             return
         self._draw_overlay_panel("川・全履歴")
         self._draw_river_bgm_control()
+        offset = LANDSCAPE_VERTICAL_OFFSET
         pyxel.text(
             12,
-            25,
+            25 + offset,
             f"合計 {self.game.river.total_count}牌・縦1列が1手番",
             COLOR_IVORY,
             self._japanese_font,
@@ -1429,7 +1625,7 @@ class MahjongPuzzleApp:
             turn_column = index // 4
             slot = index % 4
             x = 10 + turn_column * 14
-            y = 38 + slot * 23
+            y = 38 + offset + slot * 23
             pyxel.rect(x, y, 12, 16, COLOR_IVORY)
             pyxel.rectb(x, y, 12, 16, COLOR_WOOD_EDGE)
             label = tile_label(record.tile.kind)
@@ -1437,7 +1633,7 @@ class MahjongPuzzleApp:
             pyxel.text(label_x, y + 5, label, tile_color(record.tile.kind))
         pyxel.text(
             76,
-            153,
+            153 + offset,
             "TAB・BACK・Bで閉じる",
             COLOR_MUTED,
             self._japanese_font,
@@ -1478,9 +1674,14 @@ class MahjongPuzzleApp:
         status = "OFF" if self._bgm_muted else "ON"
         prefix = "A:BGM" if self.layout is LayoutMode.PORTRAIT else "SPACE/A:BGM"
         label = f"{prefix} {status}"
+        y = (
+            14
+            if self.layout is LayoutMode.PORTRAIT
+            else 14 + LANDSCAPE_VERTICAL_OFFSET
+        )
         pyxel.text(
             self.screen_width - self._japanese_text_width(label) - 12,
-            14,
+            y,
             label,
             COLOR_GOLD if not self._bgm_muted else COLOR_MUTED,
             self._japanese_font,
@@ -1503,13 +1704,23 @@ class MahjongPuzzleApp:
             acquired_y, navigation_y = 153, 231
             text_x, points_x = 13, 128
         else:
-            name_y, reading_y, description_y = 39, 54, 72
-            example_label_y, example_y = 87, 101
-            acquired_y, navigation_y = 127, 153
+            offset = LANDSCAPE_VERTICAL_OFFSET
+            name_y, reading_y, description_y = (
+                39 + offset,
+                54 + offset,
+                72 + offset,
+            )
+            example_label_y, example_y = 87 + offset, 101 + offset
+            acquired_y, navigation_y = 127 + offset, 153 + offset
             text_x, points_x = 18, 198
+        page_label_y = (
+            16
+            if self.layout is LayoutMode.PORTRAIT
+            else 16 + LANDSCAPE_VERTICAL_OFFSET
+        )
         pyxel.text(
             self.screen_width - len(page_label) * 4 - 12,
-            16,
+            page_label_y,
             page_label,
             COLOR_GOLD,
         )
@@ -1531,7 +1742,7 @@ class MahjongPuzzleApp:
         else:
             pyxel.text(
                 text_x,
-                24,
+                24 + LANDSCAPE_VERTICAL_OFFSET,
                 "3＋3＋2で基本和了・役は追加得点",
                 COLOR_IVORY,
                 self._japanese_font,
@@ -1602,18 +1813,31 @@ class MahjongPuzzleApp:
         )
 
     def _draw_overlay_panel(self, title: str) -> None:
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
         if self.layout is LayoutMode.PORTRAIT:
-            pyxel.rect(5, 8, 166, 240, COLOR_INK)
-            pyxel.rectb(5, 8, 166, 240, COLOR_WOOD_EDGE)
-            pyxel.rectb(8, 11, 160, 234, COLOR_MAHOGANY)
+            self._draw_decorated_panel(
+                5,
+                8,
+                166,
+                240,
+                fill_color=COLOR_INK,
+            )
         else:
-            pyxel.rect(5, 8, 246, 160, COLOR_INK)
-            pyxel.rectb(5, 8, 246, 160, COLOR_WOOD_EDGE)
-            pyxel.rectb(8, 11, 240, 154, COLOR_MAHOGANY)
+            self._draw_decorated_panel(
+                5,
+                8 + LANDSCAPE_VERTICAL_OFFSET,
+                246,
+                160,
+                fill_color=COLOR_INK,
+            )
+        title_y = (
+            14
+            if self.layout is LayoutMode.PORTRAIT
+            else 14 + LANDSCAPE_VERTICAL_OFFSET
+        )
         pyxel.text(
             12,
-            14,
+            title_y,
             title,
             COLOR_GOLD,
             self._japanese_font,
@@ -1623,15 +1847,14 @@ class MahjongPuzzleApp:
         if self.layout is LayoutMode.PORTRAIT:
             self._draw_portrait_result()
             return
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
         summary = GameSummary.from_session(self.session)
-        pyxel.rect(28, 14, 200, 148, COLOR_PANEL)
-        pyxel.rectb(28, 14, 200, 148, COLOR_WOOD_EDGE)
-        pyxel.rectb(31, 17, 194, 142, COLOR_MAHOGANY)
+        offset = LANDSCAPE_VERTICAL_OFFSET
+        self._draw_decorated_panel(28, 14 + offset, 200, 148)
         title = "対局結果"
         pyxel.text(
             self._centered_japanese_x(title),
-            27,
+            27 + offset,
             title,
             COLOR_GOLD,
             self._japanese_font,
@@ -1648,14 +1871,14 @@ class MahjongPuzzleApp:
         for index, (line, color) in enumerate(result_lines):
             pyxel.text(
                 68,
-                46 + index * 12,
+                46 + offset + index * 12,
                 line,
                 color,
                 self._japanese_font,
             )
         pyxel.text(
             47,
-            134,
+            134 + offset,
             "R・A:もう一度  H・START:遊び方",
             COLOR_BRIGHT_IVORY,
             self._japanese_font,
@@ -1663,7 +1886,7 @@ class MahjongPuzzleApp:
         if self.persistence_error is None:
             pyxel.text(
                 101,
-                147,
+                147 + offset,
                 "ESC:終了",
                 COLOR_MUTED,
                 self._japanese_font,
@@ -1672,18 +1895,16 @@ class MahjongPuzzleApp:
             error_text = "最高得点を保存できません"
             pyxel.text(
                 self._centered_japanese_x(error_text),
-                147,
+                147 + offset,
                 error_text,
                 COLOR_VERMILION,
                 self._japanese_font,
             )
 
     def _draw_portrait_result(self) -> None:
-        pyxel.cls(COLOR_BACKGROUND)
+        self._draw_background()
         summary = GameSummary.from_session(self.session)
-        pyxel.rect(12, 18, 152, 220, COLOR_PANEL)
-        pyxel.rectb(12, 18, 152, 220, COLOR_WOOD_EDGE)
-        pyxel.rectb(15, 21, 146, 214, COLOR_MAHOGANY)
+        self._draw_decorated_panel(12, 18, 152, 220)
         title = "対局結果"
         pyxel.text(
             self._centered_japanese_x(title),
