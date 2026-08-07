@@ -25,6 +25,8 @@ from mahjong_puzzle.app import (
     PREPARATION_DURATION_FRAMES,
     PORTRAIT_BOARD_ORIGIN_X,
     PORTRAIT_BOARD_ORIGIN_Y,
+    PORTRAIT_PANEL_WIDTH,
+    PORTRAIT_PANEL_X,
     PORTRAIT_SCREEN_HEIGHT,
     PORTRAIT_SCREEN_WIDTH,
     SCREEN_HEIGHT,
@@ -115,6 +117,36 @@ def test_portrait_layout_uses_mobile_screen_and_centered_board() -> None:
     assert app.board_origin_x == PORTRAIT_BOARD_ORIGIN_X == 24
     assert app.board_origin_y == PORTRAIT_BOARD_ORIGIN_Y == 18
     assert PORTRAIT_BOARD_ORIGIN_X * 2 + 8 * 16 == PORTRAIT_SCREEN_WIDTH
+    assert PORTRAIT_PANEL_X == 8
+    assert PORTRAIT_PANEL_WIDTH == 160
+    assert PORTRAIT_PANEL_X * 2 + PORTRAIT_PANEL_WIDTH == app.screen_width
+    assert PORTRAIT_BOARD_ORIGIN_X - PORTRAIT_PANEL_X == 16
+
+
+def test_portrait_board_frame_matches_mobile_status_width(
+    monkeypatch,
+) -> None:
+    app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
+    rectangles: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        pyxel,
+        "rect",
+        lambda x, y, width, height, *args: rectangles.append(
+            (x, y, width, height)
+        ),
+    )
+    monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
+    monkeypatch.setattr(app, "_draw_frame_corners", lambda *args: None)
+    monkeypatch.setattr(app, "_draw_tile", lambda *args, **kwargs: None)
+
+    app._draw_board()
+
+    assert rectangles[0] == (
+        PORTRAIT_PANEL_X,
+        PORTRAIT_BOARD_ORIGIN_Y - 2,
+        PORTRAIT_PANEL_WIDTH,
+        8 * 16 + 4,
+    )
 
 
 def test_landscape_layout_centers_board_and_sidebar_group() -> None:

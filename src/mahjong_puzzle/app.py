@@ -48,6 +48,8 @@ BOARD_ORIGIN_X = 9
 BOARD_ORIGIN_Y = 20
 PORTRAIT_BOARD_ORIGIN_X = 24
 PORTRAIT_BOARD_ORIGIN_Y = 18
+PORTRAIT_PANEL_X = 8
+PORTRAIT_PANEL_WIDTH = 160
 CELL_SIZE = 16
 LANDSCAPE_MAIN_X = BOARD_ORIGIN_X - 2
 LANDSCAPE_MAIN_WIDTH = SCREEN_WIDTH - LANDSCAPE_MAIN_X * 2
@@ -1312,9 +1314,17 @@ class MahjongPuzzleApp:
         self._draw_landscape_controls()
 
     def _draw_board(self) -> None:
-        frame_x = self.board_origin_x - 2
+        frame_x = (
+            PORTRAIT_PANEL_X
+            if self.layout is LayoutMode.PORTRAIT
+            else self.board_origin_x - 2
+        )
         frame_y = self.board_origin_y - 2
-        frame_width = BOARD_WIDTH * CELL_SIZE + 4
+        frame_width = (
+            PORTRAIT_PANEL_WIDTH
+            if self.layout is LayoutMode.PORTRAIT
+            else BOARD_WIDTH * CELL_SIZE + 4
+        )
         frame_height = BOARD_HEIGHT * CELL_SIZE + 4
         pyxel.rect(
             frame_x,
@@ -1448,7 +1458,10 @@ class MahjongPuzzleApp:
     def _draw_mobile_status(self) -> None:
         """縦画面の盤面下へ、プレイ中の情報をコンパクトに描画する。"""
 
-        panel_x, panel_y, panel_width, panel_height = 8, 152, 160, 98
+        panel_x = PORTRAIT_PANEL_X
+        panel_y = 152
+        panel_width = PORTRAIT_PANEL_WIDTH
+        panel_height = 98
         self._draw_decorated_panel(
             panel_x,
             panel_y,
