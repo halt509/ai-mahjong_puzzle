@@ -117,10 +117,10 @@ def test_portrait_layout_uses_mobile_screen_and_centered_board() -> None:
     assert app.board_origin_x == PORTRAIT_BOARD_ORIGIN_X == 24
     assert app.board_origin_y == PORTRAIT_BOARD_ORIGIN_Y == 18
     assert PORTRAIT_BOARD_ORIGIN_X * 2 + 8 * 16 == PORTRAIT_SCREEN_WIDTH
-    assert PORTRAIT_PANEL_X == 8
-    assert PORTRAIT_PANEL_WIDTH == 160
+    assert PORTRAIT_PANEL_X == 22
+    assert PORTRAIT_PANEL_WIDTH == 132
     assert PORTRAIT_PANEL_X * 2 + PORTRAIT_PANEL_WIDTH == app.screen_width
-    assert PORTRAIT_BOARD_ORIGIN_X - PORTRAIT_PANEL_X == 16
+    assert PORTRAIT_BOARD_ORIGIN_X - PORTRAIT_PANEL_X == 2
 
 
 def test_portrait_board_frame_matches_mobile_status_width(
@@ -327,6 +327,7 @@ def test_mobile_status_groups_score_and_combo_without_recent_river(
     app = MahjongPuzzleApp(seed=20260725, layout=LayoutMode.PORTRAIT)
     app._japanese_font = object()
     calls: list[tuple[int, int, str]] = []
+    next_positions: list[tuple[int, int]] = []
     monkeypatch.setattr(pyxel, "rect", lambda *args: None)
     monkeypatch.setattr(pyxel, "rectb", lambda *args: None)
     monkeypatch.setattr(
@@ -335,14 +336,28 @@ def test_mobile_status_groups_score_and_combo_without_recent_river(
         lambda x, y, text, *args: calls.append((x, y, text)),
     )
     monkeypatch.setattr(app, "_blt_tile", lambda *args: None)
-    monkeypatch.setattr(app, "_draw_next_block", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        app,
+        "_draw_next_block",
+        lambda _block, *, x, y: next_positions.append((x, y)),
+    )
 
     app._draw_mobile_status()
 
     score = next(call for call in calls if call[2].startswith("SCORE"))
     combo = next(call for call in calls if call[2].startswith("COMBO"))
+    left_labels = {
+        text: x
+        for x, _, text in calls
+        if text.startswith(("TURN", "SCORE")) or text in {"DORA", "NEXT"}
+    }
     labels = {text for _, _, text in calls}
     assert score[1] == combo[1]
+    assert set(left_labels.values()) == {PORTRAIT_PANEL_X + 5}
+    assert next_positions == [
+        (PORTRAIT_PANEL_X + 27 + index * 39, 199)
+        for index in range(3)
+    ]
     assert "NEXT" in labels
     assert not any(label.startswith(("得点", "連続")) for label in labels)
     assert not any(

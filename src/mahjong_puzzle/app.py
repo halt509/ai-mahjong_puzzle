@@ -48,8 +48,8 @@ BOARD_ORIGIN_X = 9
 BOARD_ORIGIN_Y = 20
 PORTRAIT_BOARD_ORIGIN_X = 24
 PORTRAIT_BOARD_ORIGIN_Y = 18
-PORTRAIT_PANEL_X = 8
-PORTRAIT_PANEL_WIDTH = 160
+PORTRAIT_PANEL_X = 22
+PORTRAIT_PANEL_WIDTH = 132
 CELL_SIZE = 16
 LANDSCAPE_MAIN_X = BOARD_ORIGIN_X - 2
 LANDSCAPE_MAIN_WIDTH = SCREEN_WIDTH - LANDSCAPE_MAIN_X * 2
@@ -1470,7 +1470,7 @@ class MahjongPuzzleApp:
             inner_inset=2,
         )
         pyxel.text(
-            13,
+            panel_x + 5,
             157,
             f"TURN {self.game.turn:02d}/{TOTAL_TURN_COUNT:02d}",
             COLOR_IVORY,
@@ -1486,7 +1486,7 @@ class MahjongPuzzleApp:
             COLOR_GOLD,
         )
         pyxel.text(
-            13,
+            panel_x + 5,
             170,
             f"SCORE {self.session.total_score}",
             COLOR_GOLD,
@@ -1498,21 +1498,21 @@ class MahjongPuzzleApp:
             COLOR_IVORY,
         )
 
-        pyxel.text(13, 184, "DORA", COLOR_IVORY)
+        pyxel.text(panel_x + 5, 184, "DORA", COLOR_IVORY)
         for index, indicator in enumerate(
             self.game.visible_dora_indicators
         ):
             self._blt_tile(
-                34 + index * (TILE_SPRITE_SIZE + 1),
+                panel_x + 26 + index * (TILE_SPRITE_SIZE + 1),
                 179,
                 indicator.kind,
             )
 
-        pyxel.text(13, 202, "NEXT", COLOR_IVORY)
+        pyxel.text(panel_x + 5, 202, "NEXT", COLOR_IVORY)
         for index, block in enumerate(self.game.next_blocks):
             self._draw_next_block(
                 block,
-                x=43 + index * 39,
+                x=panel_x + 27 + index * 39,
                 y=199,
             )
 
